@@ -21,6 +21,22 @@ dev = [
     "mypy",
 ]
 
+# Ставится на шаге 0 — генератор синтетических данных.
+data = [
+    "faker",
+    "pandas",
+    "python-docx",
+]
+
+# Ставится на шаге 3 — слой защиты персональных данных.
+# ВАЖНО: русская модель spaCy сюда не входит, она ставится отдельной командой:
+#     python -m spacy download ru_core_news_md
+# Через зависимости её тянуть нельзя — это не пакет с PyPI, а артефакт релиза.
+pii = [
+    "presidio-analyzer",
+    "presidio-anonymizer",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

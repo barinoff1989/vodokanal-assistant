@@ -4,12 +4,14 @@
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii model-pull preflight test test-live lint typecheck check
 
 help:
 	@echo "install-min — минимум для прогона тестов (быстро, ~5 МБ)"
 	@echo "install     — то же + настройки из окружения"
 	@echo "install-llm — тяжёлый LiteLLM, нужен только для живой проверки и шага 4"
+	@echo "install-data — генератор синтетики (шаг 0)"
+	@echo "install-pii — защита персональных данных + русская модель (шаг 3)"
 	@echo "model-pull  — скачать локальную тестовую модель в Ollama"
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
 	@echo "test        — тесты без внешних зависимостей"
@@ -31,6 +33,13 @@ install: install-min
 
 install-llm:
 	$(PYTHON) $(PIP_SLOW) litellm
+
+install-data:
+	$(PYTHON) $(PIP_SLOW) ".[data]"
+
+install-pii:
+	$(PYTHON) $(PIP_SLOW) ".[pii]"
+	$(PYTHON) -m spacy download ru_core_news_md
 
 model-pull:
 	ollama pull $(LOCAL_MODEL)
