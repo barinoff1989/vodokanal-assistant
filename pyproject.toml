@@ -31,6 +31,9 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Корень репозитория в sys.path: тесты запускаются без editable-установки.
+# Без этого голый `pytest` падал на импорте `app`, а работал только `python -m pytest`.
+pythonpath = ["."]
 # Живые тесты исключены из обычного прогона: без Ollama они бы падали, а не пропускались.
 # Запуск явно: pytest -m live
 addopts = "-m 'not live'"

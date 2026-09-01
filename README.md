@@ -9,18 +9,35 @@
 
 ## Что уже работает
 
+Тестам не нужны ни LiteLLM, ни Ollama, ни сеть, ни установка пакета — только pytest:
+
 ```bash
-python -m pip install -e ".[dev]"
-make test          # 21 тест, без Ollama, LiteLLM и сети
+python -m pip install --timeout 120 --retries 10 pytest pytest-asyncio
+```
+
+```bash
+python -m pytest -q
+```
+
+Ожидаемо: `21 passed, 3 deselected`. Три отложенных — живые, им нужна модель.
+
+Остальное ставится по мере надобности, не разом. `pydantic-settings` понадобится на шаге 1,
+тяжёлый `litellm` — только для живой проверки и шага 4:
+
+```bash
+python -m pip install --timeout 120 --retries 10 litellm
 ```
 
 Живая проверка на реальной модели — после установки Ollama:
 
 ```bash
-make model-pull    # qwen2.5:7b-instruct-q4_K_M
-make preflight     # Ollama поднята, модель на месте
-make test-live
+ollama pull qwen2.5:7b-instruct-q4_K_M && python -m pytest -q -m live
 ```
+
+Без Ollama живые тесты пропускаются с объяснением, а не падают.
+
+> `Makefile` дублирует эти команды короткими целями, но `make` в Windows по умолчанию нет —
+> основным считается путь через `python -m` выше.
 
 ## Ориентиры
 
