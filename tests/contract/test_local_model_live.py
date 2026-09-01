@@ -38,6 +38,28 @@ def _backend() -> LocalTestBackend:
     )
 
 
+@pytest.fixture(autouse=True)
+def _require_ollama() -> None:
+    """Пропустить живые тесты, если Ollama не поднята или модель не загружена.
+
+    Без этой проверки `pytest -m live` на машине без Ollama давал бы падение
+    вместо пропуска — красный прогон по причине, не связанной с кодом.
+    """
+    import httpx
+
+    backend = _backend()
+    try:
+        response = httpx.get(f"{backend.base_url}/api/tags", timeout=2.0)
+        response.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 — причина недоступности здесь не важна
+        pytest.skip(f"Ollama недоступна на {backend.base_url}: {exc}. См. `make model-pull`.")
+
+    loaded = {model.get("name", "") for model in response.json().get("models", [])}
+    family = backend.model.split(":")[0]
+    if not any(name.startswith(family) for name in loaded):
+        pytest.skip(f"Модель {backend.model} не загружена. Выполните `make model-pull`.")
+
+
 async def test_модель_поднята_и_загружена():
     """Преполёт на живой Ollama: сервис отвечает, нужная модель на месте."""
     await _backend().preflight()
