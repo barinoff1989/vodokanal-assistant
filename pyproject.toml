@@ -1,0 +1,48 @@
+[project]
+name = "vodokanal-assistant"
+version = "0.0.1"
+description = "AI-помощник абонента водоканала — прототип"
+requires-python = ">=3.12,<3.13"
+
+# Зависимости добавляются по шагам плана разработки (Dev_Plan.html, раздел 2.2).
+# На шаге 0.5 нужен минимум: шлюз к моделям и настройки из окружения.
+dependencies = [
+    "litellm",
+    "pydantic>=2",
+    "pydantic-settings",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "live: требует запущенной Ollama и загруженной модели; в обычном прогоне пропускается",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = false

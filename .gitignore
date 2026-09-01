@@ -1,0 +1,17 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Данные и веса моделей в репозиторий не кладутся
+fixtures/*.csv
+kb/
+models/
+*.gguf
