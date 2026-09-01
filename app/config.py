@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     yandex_folder_id: str = ""
     yandex_api_base: str = "https://llm.api.cloud.yandex.net/v1"
 
+    yandex_model_uri: str = ""
+    """Полное имя модели. Обычно пустое — собирается из каталога свойством ниже.
+
+    Задавать вручную нужно только чтобы обратиться к другой модели Яндекса, не
+    к `yandexgpt/latest`."""
+
     # --- Поиск по базе знаний (раздел 8.2) ---------------------------------- #
     # Числа не выдуманы: top_k=20 -> top_n=3 и порог 0.7 закреплены разделом 8.2
     # и показаны на диаграмме последовательностей Этапа 1.
@@ -101,6 +107,19 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def yandex_model(self) -> str:
+        """Имя модели для LiteLLM.
+
+        Собирается из каталога, а не хранится отдельной переменной: держать
+        идентификатор каталога в двух местах уже привело к расхождению — при
+        первой же правке поправили одно, а второе осталось с прежним значением,
+        и живой вызов упал с «не удалось разобрать имя модели».
+        """
+        if self.yandex_model_uri:
+            return self.yandex_model_uri
+        return f"openai/gpt://{self.yandex_folder_id}/yandexgpt/latest"
 
     @property
     def redis_url(self) -> str:
