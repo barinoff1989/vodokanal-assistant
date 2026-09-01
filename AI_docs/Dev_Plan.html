@@ -60,6 +60,11 @@
   .step{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px 21px; margin-top:20px; box-shadow:var(--shadow);}
   .step .shead{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
   .step .snum{font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:700; color:#fff; background:var(--accent); border-radius:6px; padding:3px 9px;}
+  .step .sstatus{font-family:"JetBrains Mono",monospace; font-size:10.5px; font-weight:700;
+    letter-spacing:.05em; padding:3px 9px; border-radius:999px; white-space:nowrap;}
+  .step .sstatus.done{color:var(--good); background:var(--good-bg);}
+  .step .sstatus.blocked{color:var(--crit); background:var(--crit-bg);}
+  .step .sstatus.pending{color:var(--ink-muted); background:var(--surface-2);}
   .step .stitle{font-family:"Zilla Slab",Georgia,serif; font-weight:700; font-size:1.14rem;}
   .step .sfiles{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-muted); margin-top:6px;}
   .step .sgoal{margin-top:10px; font-size:14.4px;}
@@ -352,10 +357,76 @@
 
   <section class="block" id="steps-a">
     <h2>5. Шаги разработки — основание системы</h2>
+
+    <div class="note">
+      <b>Состояние на 1 сентября 2026: закрыто пять шагов из четырнадцати.</b>
+      Репозиторий — <code>github.com/barinoff1989/vodokanal-assistant</code>,
+      206 тестов проходят, линтер и проверка типов чисты.
+    </div>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead>
+          <tr><th>Шаг</th><th>Состояние</th><th>Чем закрыт</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name">0 — синтетические данные</td>
+            <td><span class="pill crit">заблокирован</span></td>
+            <td>Ждёт CSV-примеры структуры систем от их владельцев. Писать генератор
+            по догадке — значит переделывать и его, и схемы, и часть проверок</td>
+          </tr>
+          <tr>
+            <td class="name">0.5 — локальная тестовая модель</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Обёртка над Ollama, обоснование выбора модели. Четыре характеристики
+            модели ещё не замерены — нужна установленная Ollama</td>
+          </tr>
+          <tr>
+            <td class="name">1 — фундамент</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Таксономия, схемы данных, настройки. Закрыт главный дефект прототипа —
+            рассинхрон типов обращений</td>
+          </tr>
+          <tr>
+            <td class="name">2 — конечный автомат</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Таблица переходов, правило 4.7 закреплено запретом: запись возможна
+            ровно из состояния ожидания подтверждения</td>
+          </tr>
+          <tr>
+            <td class="name">3 — слой защиты</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Обезличивание с контрольными суммами и подсказками, охранители на
+            потоке. Четыре сценария безопасности плана тестирования проходят</td>
+          </tr>
+          <tr>
+            <td class="name">4 — шлюз к модели</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Лимиты, порядок quota-first, ошибки RFC 7807. Живой сквозной вызов на
+            настоящем YandexGPT проходит</td>
+          </tr>
+          <tr>
+            <td class="name">5–11 — поиск, агенты, API, стенд, наблюдаемость</td>
+            <td><span class="pill">не начаты</span></td>
+            <td>Шаг 5 упирается в тот же блокер, что и шаг 0: индексировать нечего,
+            пока нет образцов документов базы знаний</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Порядок нарушен осознанно.</b> Шаги 1–4 сделаны раньше шага 0, хотя план ставил
+      его первым. Причина — внешняя: примеры структуры систем не получены, и генератор
+      синтетики строился бы на гипотезе. Шаги 1–4 от этих данных не зависят, поэтому
+      работа шла по ним; шаг 5 первым упрётся в отсутствие базы знаний.
+    </div>
+
     <p class="dek">Каждый шаг закрывается своей проверкой. Переход к следующему без закрытия предыдущего запрещён: именно так прототип однажды пришлось переписывать целиком.</p>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 0</span><span class="stitle">Синтетические данные</span><span class="stime">2–5 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 0</span><span class="sstatus blocked">ЗАБЛОКИРОВАН</span><span class="stitle">Синтетические данные</span><span class="stime">2–5 ч</span></div>
       <div class="sfiles">scripts/generate_synthetic.py · fixtures/*.csv · kb/**</div>
       <div class="sgoal">Наполнить локальные хранилища данными, повторяющими структуру реальных систем. Без этого шага ни поиск, ни адаптеры не на чем проверять — реальные системы внутри закрытой сети.</div>
 
@@ -386,7 +457,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 0.5</span><span class="stitle">Локальная тестовая модель</span><span class="stime">2–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 0.5</span><span class="sstatus done">ГОТОВО</span><span class="stitle">Локальная тестовая модель</span><span class="stime">2–3 ч</span></div>
       <div class="sfiles">app/gateway/local_test_backend.py · docs/model-choice.md</div>
       <div class="sgoal">Подключить локальную модель как ещё один backend шлюза, чтобы офлайн-проверки промптов и Security Layer не тратили платный внешний API. Переключение внешняя ↔ локальная — одной строкой конфигурации, без правки кода.</div>
 
@@ -409,7 +480,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 1</span><span class="stitle">Фундамент — конфигурация, таксономия, схемы</span><span class="stime">1–2 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 1</span><span class="sstatus done">ГОТОВО</span><span class="stitle">Фундамент — конфигурация, таксономия, схемы</span><span class="stime">1–2 ч</span></div>
       <div class="sfiles">app/config.py · app/taxonomy.py · app/models.py</div>
       <div class="sgoal">Единый справочник типов обращений и схемы данных. От них зависят все остальные модули, поэтому они первые — и поэтому здесь же закрывается главный дефект прототипа.</div>
 
@@ -431,7 +502,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 2</span><span class="stitle">Конечный автомат обращения</span><span class="stime">1–2 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 2</span><span class="sstatus done">ГОТОВО</span><span class="stitle">Конечный автомат обращения</span><span class="stime">1–2 ч</span></div>
       <div class="sfiles">app/fsm.py</div>
       <div class="sgoal">Допустимые переходы между состояниями обращения. На автомате строится вся оркестрация, и он же — место, где живёт гарантия «без подтверждения записи не будет».</div>
 
@@ -453,7 +524,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 3</span><span class="stitle">Security Layer — фильтр ПДн и Guardrails</span><span class="stime">2–4 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 3</span><span class="sstatus done">ГОТОВО</span><span class="stitle">Security Layer — фильтр ПДн и Guardrails</span><span class="stime">2–4 ч</span></div>
       <div class="sfiles">app/gateway/pii_filter.py · app/gateway/guardrails.py</div>
       <div class="sgoal">Реализация того, что уже нарисовано на диаграмме шлюза: обезличивание до отправки во внешнюю модель и проверка ответа перед выдачей абоненту. Новое проектирование здесь не ведётся.</div>
 
@@ -482,7 +553,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 4</span><span class="stitle">LLM Gateway</span><span class="stime">2–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 4</span><span class="sstatus done">ГОТОВО</span><span class="stitle">LLM Gateway</span><span class="stime">2–3 ч</span></div>
       <div class="sfiles">app/gateway/llm_gateway.py · app/gateway/quota.py</div>
       <div class="sgoal">Единая точка обращения к моделям: квоты, обезличивание, вызов провайдера, проверка ответа. Порядок проверок зафиксирован версией 4.5 и обязателен.</div>
 
@@ -519,7 +590,7 @@
     <h2>6. Шаги разработки — поиск, агенты, интерфейс</h2>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 5</span><span class="stitle">Retrieval и индексация</span><span class="stime">3–5 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 5</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Retrieval и индексация</span><span class="stime">3–5 ч</span></div>
       <div class="sfiles">app/vector/vector_store.py · app/vector/embeddings.py · app/etl/{ingest,splitter,indexer}.py</div>
       <div class="sgoal">Поиск по базе знаний и конвейер её индексации. Нужен раньше агентов: и классификатор, и консультант читают из него.</div>
 
@@ -554,7 +625,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 6</span><span class="stitle">Агенты</span><span class="stime">3–5 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 6</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Агенты</span><span class="stime">3–5 ч</span></div>
       <div class="sfiles">app/agents/{triage,advisor,form,draft_validator}.py</div>
       <div class="sgoal">Тонкие обёртки над шлюзом и поиском. Тяжёлый фреймворк агентов не нужен — вся логика состояний живёт в автомате шага 2.</div>
 
@@ -580,7 +651,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 7</span><span class="stitle">Оркестрация</span><span class="stime">2–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 7</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Оркестрация</span><span class="stime">2–3 ч</span></div>
       <div class="sfiles">app/supervisor.py</div>
       <div class="sgoal">Связать автомат и агентов в один сценарий диалога.</div>
 
@@ -597,7 +668,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 8</span><span class="stitle">API и потоковая отдача</span><span class="stime">1–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 8</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">API и потоковая отдача</span><span class="stime">1–3 ч</span></div>
       <div class="sfiles">app/api.py · app/main.py</div>
       <div class="sgoal">Публикация наружу по контракту: два endpoint'а, настоящий поток вместо имитации, ошибки в стандартном формате.</div>
 
@@ -622,7 +693,7 @@
 
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 8.5</span><span class="stitle">Демо-стенд вместо личного кабинета</span><span class="stime">3–5 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 8.5</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Демо-стенд вместо личного кабинета</span><span class="stime">3–5 ч</span></div>
       <div class="sfiles">web/index.html · web/app.js · web/style.css — отдаются статикой самим сервисом</div>
       <div class="sgoal">Доступа к настоящему личному кабинету на прототипе не будет, а показывать систему как-то нужно. Одна страница, имитирующая кабинет: выбор абонента, его лицевой счёт и баланс из синтетики, под ними — виджет диалога.</div>
 
@@ -663,7 +734,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 9</span><span class="stitle">Адаптеры Этапа 2 — заглушки</span><span class="stime">2–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 9</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Адаптеры Этапа 2 — заглушки</span><span class="stime">2–3 ч</span></div>
       <div class="sfiles">app/adapters/{billing_adapter,inquiry_service,document_generator}.py</div>
       <div class="sgoal">Только заглушки: Этап 2 не внедряется до метрик Этапа 1. Проверяется логика гейтов, а не реальный путь записи.</div>
 
@@ -690,7 +761,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 10</span><span class="stitle">Наблюдаемость и эталонный набор</span><span class="stime">2–4 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 10</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Наблюдаемость и эталонный набор</span><span class="stime">2–4 ч</span></div>
       <div class="sfiles">app/metrics/prometheus.py · scripts/build_golden_set.py · golden_set/**</div>
       <div class="sgoal">Замкнуть цикл на уже спроектированные дашборд и план тестирования качества: метрики начинают эмитироваться, эталонный набор появляется физически.</div>
 
@@ -722,7 +793,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 11</span><span class="stitle">Финал — README и структура репозитория</span><span class="stime">2–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 11</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Финал — README и структура репозитория</span><span class="stime">2–3 ч</span></div>
       <div class="sfiles">README.md · Makefile · .env.example</div>
       <div class="sgoal">Собрать всё так, чтобы проект поднимался у человека, который его не писал. Пишется последним: раньше кода README был бы выдумкой.</div>
 
