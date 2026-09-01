@@ -25,6 +25,33 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+
+def _load_dotenv() -> str:
+    """Подхватить .env из корня репозитория, если он есть.
+
+    Без этого самый естественный способ задать ключ — записать его в .env —
+    молча не сработал бы: скрипт запускается отдельно от приложения и его
+    настроек. Уже заданные переменные окружения имеют приоритет.
+    """
+    path = Path(__file__).resolve().parent.parent / ".env"
+    if not path.exists():
+        return "не найден, читаются только переменные окружения"
+    taken = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and not os.getenv(key):
+            os.environ[key] = value
+            taken += 1
+    return f"прочитан, взято значений: {taken}"
+
+
+DOTENV = _load_dotenv()
 
 HOST = "llm.api.cloud.yandex.net"
 BASE = os.getenv("YANDEX_API_BASE", f"https://{HOST}/v1")
@@ -226,6 +253,7 @@ def check_stream(auth: str) -> None:
 
 def main() -> int:
     print(f"Проверка подключения к {HOST}")
+    print(f".env       : {DOTENV}")
     print(f"адрес API : {BASE}")
     print(f"модель    : {MODEL if FOLDER or 'gpt://' not in MODEL else '(не задан каталог)'}")
     print(f"ключ      : {'задан, длина ' + str(len(API_KEY)) if API_KEY else 'НЕ ЗАДАН'}")
