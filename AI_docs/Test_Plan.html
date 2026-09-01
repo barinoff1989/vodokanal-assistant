@@ -1,0 +1,626 @@
+<meta charset="utf-8">
+<title>План тестирования — весь проект</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6FAFB; --surface:#FFFFFF; --surface-2:#EAF2F3; --ink:#10202A; --ink-muted:#4C6169;
+    --line:#D7E3E6; --accent:#0E7C86; --accent-ink:#063A40; --accent-2:#2C5DA8;
+    --good:#1B8F5E; --warn:#A66A12; --crit:#B33D26;
+    --good-bg:#E4F5EC; --warn-bg:#FBF0DC; --crit-bg:#FBE6E1;
+    --shadow: 0 1px 2px rgba(16,32,42,0.06), 0 10px 28px -14px rgba(16,32,42,0.22);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+      --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+      --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+      --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+    --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+    --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+    --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:"Public Sans","Segoe UI",sans-serif; font-size:16px; line-height:1.65; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif; font-weight:700; color:var(--ink); text-wrap:balance; margin:0;}
+  code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.92em;}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 28px 110px;}
+  .titlebar{padding:52px 28px 34px; border-bottom:1px solid var(--line); background:var(--surface);}
+  .titlebar-inner{max-width:1000px; margin:0 auto;}
+  .titlebar h1{font-size:clamp(1.8rem,4vw,2.3rem); letter-spacing:-.01em;}
+  .titlebar p{color:var(--ink-muted); margin-top:12px; max-width:680px; font-size:1.02rem;}
+  section.block{padding-top:52px;}
+  .block h2{font-size:1.35rem; margin-bottom:6px;}
+  .block h3{font-size:1.05rem; margin:26px 0 6px;}
+  .block .dek{color:var(--ink-muted); max-width:720px; margin-top:8px; font-size:14.5px;}
+  .table-wrap{overflow-x:auto; margin-top:18px;}
+  table.spec{width:100%; border-collapse:collapse; font-size:13.6px; min-width:640px;}
+  table.spec th{text-align:left; font-family:"JetBrains Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); padding:0 11px 9px; border-bottom:2px solid var(--line); white-space:nowrap;}
+  table.spec td{padding:10px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.spec tr:last-child td{border-bottom:none;}
+  table.spec td.name{font-weight:600;}
+  table.spec td.num{font-family:"JetBrains Mono",monospace; text-align:right; white-space:nowrap;}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; font-family:"JetBrains Mono",monospace; white-space:nowrap;}
+  .pill.good{color:var(--good); background:var(--good-bg);}
+  .pill.warn{color:var(--warn); background:var(--warn-bg);}
+  .pill.crit{color:var(--crit); background:var(--crit-bg);}
+  .note{margin-top:16px; padding:13px 16px; border-radius:8px; font-size:14px; background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--accent); color:var(--ink);}
+  .note.crit{border-left-color:var(--crit);}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--accent-ink);}
+  .formula{font-family:"JetBrains Mono",monospace; font-size:13px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 15px; margin-top:12px; overflow-x:auto; color:var(--ink);}
+  .finding{background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--crit); border-radius:9px; padding:16px 19px; margin-top:16px; box-shadow:var(--shadow);}
+  .finding h3{margin:0 0 6px; font-size:1.08rem; color:var(--crit);}
+  .finding p{margin:6px 0 0; font-size:14.2px;}
+  .tier{background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:16px 19px; margin-top:14px;}
+  .tier .tname{font-weight:700; font-size:1.02rem; font-family:"Zilla Slab",Georgia,serif;}
+  .tier .tsub{font-size:12.5px; color:var(--ink-muted); font-family:"JetBrains Mono",monospace; margin-top:2px;}
+  hr.rule{border:none; border-top:1px solid var(--line); margin:48px 0 0;}
+  footer{margin-top:56px; padding:22px 0 0; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-muted);}
+</style>
+
+<div class="titlebar">
+  <div class="titlebar-inner">
+    <h1>План тестирования — весь проект</h1>
+    <p>Функциональные, контрактные, интеграционные, e2e, security, нагрузочные тесты и тесты данных — поверх уже готового плана тестирования RAG, который закрывает только качество ответов. Каждый уровень привязан к артефакту, из которого он выведен, и к шагу плана сборки, на котором пишется.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="block" id="scope">
+    <h2>0. Границы документа</h2>
+    <p class="dek">Закрывает строку матрицы сдачи «План тестирования (весь проект)», которая имела статус «частично»: существовал только план качества RAG.</p>
+
+    <div class="note">
+      <b>Качество RAG здесь не дублируется.</b> Метрики Faithfulness / Answer Relevancy / Context Precision / Context Recall, Golden Set, выбор судьи, правило регрессии &gt;5% — всё это уже спроектировано в отдельном документе и остаётся его зоной ответственности. Этот план ссылается на него и добавляет всё, что лежит <b>вне</b> метрик качества ответа: работает ли система функционально, соблюдает ли контракты, выдерживает ли нагрузку, не течёт ли через неё ПДн.
+    </div>
+
+    <div class="note warn">
+      <b>Имя файла RAG-плана в контексте указано неверно.</b> Разделы 36, 37 и 38.1 файла <code>контекст_4.md</code> ссылаются на <code>dz6/RAG_Testing_Plan.html</code> и <code>dz6/Observability_Dashboard.html</code> — таких файлов нет. Фактические имена: <code>dz6/План теста RAG.html</code> и <code>dz6/Дашборды.html</code>. Здесь используются фактические; расхождение внесено в открытые пункты (раздел 15).
+    </div>
+
+    <h3>Чем этот план является и чем не является</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Является</th><th>Не является</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Планом-обязательством: что именно будет проверено, чем, на каком шаге плана сборки и что считается провалом</td>
+            <td>Отчётом о прогонах — кода ещё нет ни строки, фаза 6 плана сборки не начата</td>
+          </tr>
+          <tr>
+            <td>Мостом к ТЗ: раздел 13 переводит DoD раздела 18 контекста в проверяемые критерии приёмки</td>
+            <td>Заменой плана тестирования RAG — тот остаётся источником истины по качеству ответов</td>
+          </tr>
+          <tr>
+            <td>Списком того, что <b>невозможно</b> проверить на этом проекте, с указанием, что для этого нужно (раздел 14)</td>
+            <td>Тест-кейсами построчно — здесь классы проверок и критерии, конкретные кейсы пишутся вместе с кодом модуля</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Главное ограничение проекта, определяющее весь план.</b> Биллинг, Личный кабинет, БД обращений, БД ЛКК и файловое хранилище базы знаний находятся внутри закрытой сети водоканала — доступа нет ни на разработке, ни на демонстрации. Поэтому <b>все</b> уровни тестирования работают на синтетических данных (код-шаг 0 плана сборки), а проверка на реальных системах в этом проекте не выполняется в принципе — не «отложена», а невозможна. Раздел 14 фиксирует это явно, чтобы отсутствие таких тестов не читалось как пробел.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="levels">
+    <h2>1. Уровни тестирования и что каждый доказывает</h2>
+    <p class="dek">Уровень имеет право на существование, только если доказывает то, чего не доказывает уровень ниже. Ниже — что именно доказывает каждый и почему без него нельзя обойтись.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Уровень</th><th>Доказывает</th><th>Инструмент</th><th>Где выполняется</th><th>Раздел</th></tr></thead>
+        <tbody>
+          <tr><td class="name">L1 · Модульные</td><td>Каждая функция ведёт себя как задумано, и ни один из девяти известных дефектов прототипа не вернулся</td><td>pytest</td><td>PR, локально</td><td>3</td></tr>
+          <tr><td class="name">L2 · Контрактные</td><td>API отвечает ровно по спецификации: коды, схемы, заголовки, SSE-события, RFC 7807</td><td>schemathesis, spectral, swagger-cli</td><td>PR</td><td>4</td></tr>
+          <tr><td class="name">L3 · Интеграционные</td><td>Компоненты соединяются друг с другом и с хранилищами: фильтры реально применяются, upsert доходит, состояние сохраняется</td><td>pytest + testcontainers</td><td>PR (короткий набор), ночь (полный)</td><td>5</td></tr>
+          <tr><td class="name">L4 · E2E</td><td>Сценарии из диаграмм последовательностей проходят целиком, включая ветки отказа и fallback</td><td>pytest + httpx (SSE-клиент)</td><td>Ночь, пред-релиз</td><td>6</td></tr>
+          <tr><td class="name">S · Security</td><td>Каждая угроза STRIDE либо закрыта проверяемым тестом, либо явно названа открытым риском</td><td>pytest + собственный корпус атак</td><td>PR (быстрые), ночь (полные)</td><td>7</td></tr>
+          <tr><td class="name">P · Нагрузочные</td><td>Целевые NFR держатся при расчётной нагрузке, а не в декларации</td><td>Locust</td><td>Пред-релиз, по расписанию</td><td>8</td></tr>
+          <tr><td class="name">D · Данные и ETL</td><td>В индекс попадает то, что должно, в той версии, в какой должно, и реиндекс не рвёт поиск</td><td>pytest + прогон на синтетике</td><td>Ночь</td><td>9</td></tr>
+          <tr><td class="name">O · Наблюдаемость</td><td>Метрики и алерты, описанные в дашборде, реально существуют и срабатывают</td><td>promtool, scrape-проверка</td><td>PR</td><td>10</td></tr>
+          <tr><td class="name">Q · Качество RAG</td><td>Ответы обоснованы контекстом и релевантны вопросу</td><td>Ragas, DeepEval</td><td>PR (подвыборка), ночь (весь Golden Set)</td><td><i>вне этого документа</i></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Почему уровней девять, а не три.</b> Классическая пирамида (unit / integration / e2e) не покрывает четыре вещи, которые в этом проекте несущие: соблюдение внешнего контракта API (правила 4.4–4.6), барьер ПДн (правило 4.2 и 152-ФЗ), поведение под нагрузкой при заявленных NFR (открытый P0 №2) и корректность данных в индексе (от неё напрямую зависит Recall@3). Каждое из них — отдельный уровень с собственным гейтом, потому что провал любого из них не проявляется как падение теста на уровне ниже: система продолжает работать и молча выдавать плохой результат.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="coverage">
+    <h2>2. Карта покрытия — какой контейнер каким уровнем закрыт</h2>
+    <p class="dek">Строки — контейнеры C4 L2, для которых существует диаграмма C3 (наш код, восемь штук). Три узла L2 сознательно без C3 — они не наш код и проверяются только конфигурацией и интеграцией.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Контейнер</th><th>Этап</th><th>L1</th><th>L2</th><th>L3</th><th>L4</th><th>S</th><th>P</th><th>D</th><th>Что здесь критично проверить</th></tr></thead>
+        <tbody>
+          <tr><td class="name">AI-виджет в ЛК</td><td>1</td><td>✅</td><td>—</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>Рендер SSE до конца потока, повтор по 429 + Retry-After, Document Panel и Confirmation Dialog как два разных состояния документа</td></tr>
+          <tr><td class="name">API Gateway / Backend</td><td>1</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>Ретривал с фильтром <code>inquiry_type</code>, привязка <code>subscriber_id</code> к сессии, fallback при <code>score &lt; 0.7</code></td></tr>
+          <tr><td class="name">LLM Gateway</td><td>1</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>Порядок quota-first, ПДн скрыты до провайдера, Guardrails sync &lt; 50 мс, 429 + Retry-After</td></tr>
+          <tr><td class="name">ETL Worker</td><td>1</td><td>✅</td><td>—</td><td>✅</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>Delta-индексация по Sync State, blue-green alias, tombstones, окно 02:00–05:00</td></tr>
+          <tr><td class="name">Agent Orchestrator</td><td>2</td><td>✅</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>Переходы FSM, Draft Validator, HITL Gate как единственный переход к записи</td></tr>
+          <tr><td class="name">Document Generator</td><td>2</td><td>✅</td><td>—</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>Путь документа до абонента целиком, срок жизни ссылки</td></tr>
+          <tr><td class="name">Billing Adapter</td><td>2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>Идемпотентность, проверка <code>subscriber_id</code>, запись только после подтверждения</td></tr>
+          <tr><td class="name">Сервис работы с обращениями</td><td>2</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>То же + маршрутизация <code>emergency</code> в Диспетчерскую систему</td></tr>
+          <tr><td class="name"><i>Vector Database</i></td><td>1</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>—</td><td>✅</td><td>✅</td><td>Не наш код: конфигурация HNSW (<code>m=16</code>, <code>ef=128</code>), payload-индексы, P99 поиска</td></tr>
+          <tr><td class="name"><i>Session State Store</i></td><td>1</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>Не наш код: сохранение состояния FSM и аудит-лога, срок хранения диалогов</td></tr>
+          <tr><td class="name"><i>Embedding / Reranker Inference</i></td><td>1</td><td>—</td><td>—</td><td>✅</td><td>—</td><td>—</td><td>✅</td><td>✅</td><td>Не наш код (TEI/vLLM): версия модели в payload, конкуренция за GPU с ETL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Контейнеры Этапа 2 тестируются как заглушки, а не как рабочий код.</b> Stage-gating (раздел 19, п. 9) запрещает внедрять Этап 2 до метрик Этапа 1, и код-шаг 9 плана сборки пишет адаптеры именно заглушками. Поэтому уровни L1/L3/L4/S для них проверяют логику гейтов — HITL, идемпотентность, привязку абонента — на синтетическом слепке, а не реальный write-путь.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="unit">
+    <h2>3. L1 — модульные тесты и регрессия известных дефектов</h2>
+    <p class="dek">Особенность проекта: девять дефектов прототипа уже найдены и описаны (раздел 11 контекста). Это готовый регрессионный набор — каждый дефект превращается в именованный тест, который обязан падать на старом коде и проходить на новом.</p>
+
+    <h3>3.1. Регрессия по разделу 11 — обязательный набор</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Дефект</th><th>Тест</th><th>Модуль · шаг</th></tr></thead>
+        <tbody>
+          <tr><td class="name">11.1<br>11.2</td><td>Таксономический mismatch: русские значения с хвостовыми пробелами в <code>INQUIRY_TYPES</code>, в metadata RAG и в keywords Triage не совпадают между собой</td><td>Для всех 10 canonical-значений: значение из справочника == значение в payload вектора == ключ в keywords. Свойство-тест: любое значение после <code>.strip().lower()</code> равно самому себе</td><td><code>taxonomy.py</code><br>шаг 1</td></tr>
+          <tr><td class="name">11.3</td><td>Артефакты <code>from future import</code>, <code>def init</code>, <code>if name == "main"</code></td><td>Закрывается не тестом, а линтером в том же гейте PR: ruff + mypy на весь пакет. Тест бессмысленен — код с такими артефактами просто не импортируется</td><td>весь пакет<br>шаг 1</td></tr>
+          <tr><td class="name">11.4</td><td>Невалидный regex телефона</td><td>Позитивный набор: <code>+7 999 123-45-67</code>, <code>8(999)1234567</code>, <code>89991234567</code> и ещё пять форматов — все распознаны. Негативный: номер счёта, дата, сумма — не распознаны как телефон</td><td><code>gateway/pii_filter.py</code><br>шаг 3</td></tr>
+          <tr><td class="name">11.5</td><td>Regex лицевого счёта <code>\b\d{9,10}\b</code> слишком широк — ловит любое 9–10-значное число</td><td>Ключевой негативный тест: сумма, дата без разделителей, номер телефона без <code>+7</code> — <b>не</b> помечаются как лицевой счёт. Позитивный: то же число рядом с «лицевой счёт», «л/с», «ЛС» — помечается</td><td><code>gateway/pii_filter.py</code><br>шаг 3</td></tr>
+          <tr><td class="name">11.6</td><td>Embedding search вызывается без фильтра <code>inquiry_type</code></td><td>На фикстуре из четырёх типов обращений: поиск с фильтром возвращает чанки только одного типа. Тест-ловушка: замоканный клиент фиксирует, что <code>filter</code> реально передан вниз, а не потерян в обёртке</td><td><code>vector/vector_store.py</code><br>шаг 5</td></tr>
+          <tr><td class="name">11.7</td><td>Streaming имитируется генератором, полноценного SSE нет</td><td>Проверяется контрактным уровнем (раздел 4) и e2e (раздел 6): типы событий, порядок, завершение потока</td><td><code>api.py</code><br>шаг 8</td></tr>
+          <tr><td class="name">11.8</td><td>Fallback возвращает <code>prochee</code> вместо canonical <code>other</code></td><td>Любой путь, возвращающий тип обращения — включая fallback, keyword-режим и ошибку классификатора — отдаёт значение из справочника. Параметризованный тест по всем точкам выхода</td><td><code>agents/triage.py</code><br>шаг 6</td></tr>
+          <tr><td class="name">11.9</td><td>Пробелы в ключах словаря переходов FSM</td><td>Все ключи <code>transitions</code> сравниваются с эталонным списком побайтно; отдельно — что каждый переход из диаграммы последовательностей существует в FSM</td><td><code>fsm.py</code><br>шаг 2</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Дефекты 11.1 и 11.6 — не рядовые баги.</b> Оба ломают RAG молча: система отвечает, ничего не падает, но фильтр не находит документы и ответ строится на пустом или чужом контексте. Поэтому они вынесены в обязательный гейт PR, а не в ночной прогон — регрессия такого класса не должна доживать до merge.
+    </div>
+
+    <h3>3.2. Модульные тесты по шагам плана сборки</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Шаг</th><th>Модуль</th><th>Что проверяет модульный тест</th></tr></thead>
+        <tbody>
+          <tr><td class="name">1</td><td><code>config.py</code> · <code>taxonomy.py</code> · <code>models.py</code></td><td>Нормализация <code>inquiry_type</code>; display-name существует для всех 10 кодов и только для них; валидация Pydantic-схем запроса и ответа по разделу 7, включая границу <code>query ≤ 2000</code> символов</td></tr>
+          <tr><td class="name">2</td><td><code>fsm.py</code></td><td>Все допустимые переходы проходят; недопустимые отклоняются ошибкой, а не молча. Отдельно: из <code>AWAITING_CONFIRMATION</code> нельзя попасть в <code>SUBMITTED</code> иначе как явным подтверждением</td></tr>
+          <tr><td class="name">3</td><td><code>gateway/pii_filter.py</code> · <code>guardrails.py</code></td><td>Шесть типов сущностей (ФИО, СНИЛС, ИНН, лицевой счёт, телефон, email) на корпусе форматов; <code>pii_report</code> содержит типы, но не значения; sync-проверка укладывается в 50 мс на типовом ответе</td></tr>
+          <tr><td class="name">4</td><td><code>gateway/llm_gateway.py</code></td><td>Порядок вызовов: квота проверяется <b>до</b> обезличивания (quota-first, раздел 41.3); при превышении — 429 с <code>Retry-After</code> и без обращения к провайдеру; счётчик токенов учитывает вход и выход</td></tr>
+          <tr><td class="name">5</td><td><code>vector/vector_store.py</code></td><td>Фильтр применяется; <code>top_k=20</code> уходит в поиск, <code>top_n=3</code> выходит после реранжинга; при <code>score &lt; 0.7</code> возвращается пустой результат, а не низкорелевантный</td></tr>
+          <tr><td class="name">6</td><td><code>agents/*.py</code></td><td>Triage: LLM-режим и keyword-fallback дают значение из справочника. Advisor: не вызывает генерацию при пустом контексте. Form: запрашивает ровно недостающие обязательные слоты (<code>full_name</code>, <code>account_number</code>, <code>reason</code>)</td></tr>
+          <tr><td class="name">7</td><td><code>supervisor.py</code></td><td>Связка FSM и агентов: happy path, ветка пустой базы, ветка низкой уверенности — каждая доходит до терминального состояния, а не зависает</td></tr>
+          <tr><td class="name">8</td><td><code>api.py</code> · <code>main.py</code></td><td>Покрыто контрактным уровнем (раздел 4); модульно — только сериализация ошибок в RFC 7807</td></tr>
+          <tr><td class="name">9</td><td><code>adapters/*.py</code></td><td>HITL-гейт: write не выполняется вне состояния <code>AWAITING_CONFIRMATION</code>. Идемпотентность: повтор с тем же ключом не создаёт вторую операцию. Отказ абонента пишется в аудит</td></tr>
+          <tr><td class="name">10</td><td><code>metrics/*</code> · <code>golden_set/*</code></td><td>Покрыто уровнем наблюдаемости (раздел 10) и планом тестирования RAG</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Порог покрытия.</b> Осмысленная цель — не общий процент по репозиторию, а <b>полное покрытие ветвлений</b> в четырёх модулях, где ошибка не видна снаружи: <code>taxonomy.py</code>, <code>pii_filter.py</code>, <code>fsm.py</code>, <code>vector_store.py</code>. Для остального кода — 70% строк как гигиенический минимум, не как гейт. Общий процент по репозиторию гейтом не делается сознательно: он провоцирует писать тесты ради цифры там, где они дёшевы, вместо тех мест, где они нужны.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="contract">
+    <h2>4. L2 — контрактные тесты</h2>
+    <p class="dek">Контракт зафиксирован разделом 7 контекста и правилами 4.4–4.6. Контрактный тест отличается от модульного тем, что проверяет не поведение функции, а соблюдение обещания, данного другой стороне — виджету и, на Этапе 2, оркестратору.</p>
+
+    <h3>4.1. Внутренний API Backend ↔ LLM Gateway</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Что проверяется</th><th>Критерий прохождения</th><th>Источник требования</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Состав endpoint'ов</td><td>Отвечают ровно два: <code>POST /v1/generate</code> и <code>GET /v1/healthz</code>. Любой третий путь — 404. Отдельная проверка: <code>/models</code> отсутствует</td><td>правило 4.4</td></tr>
+          <tr><td class="name">Версионирование</td><td>Только URI-версия <code>/v1/</code>. Запрос без префикса версии или с версией в заголовке — 404, не «умное» перенаправление</td><td>правило 4.6</td></tr>
+          <tr><td class="name">Схема запроса</td><td>Валидны: <code>system</code> обязателен; <code>query</code> ≤ 2000 символов; <code>context</code> может быть пустым массивом; <code>metadata</code> обязательна. Нарушение каждого — 400 с телом RFC 7807</td><td>раздел 7.2</td></tr>
+          <tr><td class="name">Коды ошибок</td><td>400, 401, 429, 502, 504 — каждый воспроизводится отдельным сценарием и возвращает тело RFC 7807 с полями <code>type</code>, <code>title</code>, <code>status</code>, <code>detail</code>, <code>instance</code>, <code>trace_id</code></td><td>правило 4.5, раздел 7.4</td></tr>
+          <tr><td class="name">429 · Retry-After</td><td>Заголовок <code>Retry-After</code> присутствует <b>всегда</b> при 429 и содержит число секунд. Отсутствие заголовка — провал теста, а не предупреждение</td><td>раздел 7.4, раздел 35.1</td></tr>
+          <tr><td class="name">Заголовки безопасности</td><td><code>/v1/generate</code> без <code>X-Internal-Token</code> — 401. <code>X-Trace-Id</code> из запроса возвращается в ответе и присутствует в теле ошибки</td><td>раздел 7</td></tr>
+          <tr><td class="name">SSE-поток</td><td>События строго из набора <code>token</code> · <code>metadata</code> · <code>done</code> · <code>error</code>; <code>metadata</code> приходит один раз перед <code>done</code>; поток всегда завершается либо <code>done</code>, либо <code>error</code>, но не обрывом соединения</td><td>раздел 7.3, правило 4.3</td></tr>
+          <tr><td class="name">Полнота метаданных</td><td>В <code>metadata</code>-событии присутствуют <code>sources</code>, <code>confidence_score</code>, <code>suggested_actions</code>, <code>disclaimer</code> — все четыре, даже если пустые</td><td>раздел 3, раздел 6.1</td></tr>
+          <tr><td class="name"><code>/v1/healthz</code></td><td>Отвечает без авторизации (<code>security: []</code>) и не раскрывает ничего, кроме статуса — ни версий зависимостей, ни адресов, ни конфигурации</td><td>раздел 7.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Инструменты.</b> Статическая валидация спецификации — <code>swagger-cli validate</code> и <code>spectral lint</code> в гейте PR (это открытый пункт раздела 16, п. 2 контекста, здесь он получает исполнителя). Динамическая проверка соответствия реализации спецификации — <code>schemathesis</code>, который генерирует запросы из самой OpenAPI-схемы: так контракт проверяется против спецификации, а не против представления разработчика о ней.
+    </div>
+
+    <div class="note warn">
+      <b>Семь остаточных проблем спецификации (раздел 7.6) блокируют часть контрактных тестов.</b> Пока в спецификации <code>servers: localhost</code> помечен как production, у SSE-события <code>error</code> нет схемы, а <code>source_title</code>/<code>source_url</code> принимаются, но не возвращаются — контрактный тест на эти места писать не на что. Спецификацию нужно довести <b>до</b> код-шага 8, иначе тесты будут закреплять её дефекты. Внесено в открытые пункты (раздел 15).
+    </div>
+
+    <h3>4.2. Контракты внешних систем</h3>
+    <p class="dek">Правило раздела 29.5: в чужую систему обращаемся только через её API, никогда напрямую в её БД. Контрактные тесты должны защищать именно это правило, а не только формат сообщений.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Система</th><th>Протокол</th><th>Как тестируется</th><th>Ограничение</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Биллинг</td><td>внешний XML-RPC API</td><td>Тестовый дубль, отвечающий по зафиксированной сигнатуре методов; записанные фикстуры ответов. Отдельный архитектурный тест: в коде нет ни одного SQL-клиента к БД Биллинга</td><td>Реальный API недоступен — сигнатуры взяты из документации системы-владельца и помечены как <b>ДОПУЩЕНИЕ</b> до сверки</td></tr>
+          <tr><td class="name">Микросервис обращений</td><td>API микросервиса</td><td>Дубль + проверка, что регистрация обращения идёт только через API. Архитектурный тест: прямых обращений к таблице обращений нет</td><td>Протокол в контексте помечен как предположение (раздел 5.3) — сверить с каталогом источников</td></tr>
+          <tr><td class="name">Диспетчерская система</td><td>REST API</td><td>Дубль на чтение (Этап 1, данные по авариям) и на запись (Этап 2, аварийная заявка)</td><td>Реальная система недоступна</td></tr>
+          <tr><td class="name">LLM Provider</td><td>внешний API через LiteLLM</td><td>Локальная тестовая модель (код-шаг 0.5) подключается как ещё один backend конфигом — тот же контракт, без трат на платный API. Отдельно — калибровочный прогон против реального провайдера</td><td>Массовые прогоны против платного API не выполняются (раздел 8)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Архитектурный тест как способ защитить правило.</b> Правило «только через API владельца» нельзя проверить обычным функциональным тестом — дубль ответит одинаково и на корректный вызов, и на нарушение. Поэтому вводится отдельный статический тест по импортам и зависимостям: ни один модуль, кроме адаптеров, не импортирует драйвер БД чужой системы, а адаптеры не импортируют его вовсе. Это тот же класс проверки, который в разделе 41.9 контекста дважды позволил отклонить ошибочные внешние замечания — только автоматизированный.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="integration">
+    <h2>5. L3 — интеграционные тесты</h2>
+    <p class="dek">Проверяют стыки, на которых модульные тесты слепы: реальный Qdrant вместо мока, реальный Redis, реальный поток SSE через два сервиса. Поднимаются через testcontainers, чтобы прогон не зависел от того, что установлено на машине разработчика.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Стык</th><th>Что доказывает</th><th>Гейт</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Backend → Vector DB</td><td>Фильтр <code>inquiry_type</code> применяется реальным Qdrant, а не только передаётся в клиент (дефект 11.6 на настоящей базе); payload-индексы существуют для <code>inquiry_type</code>, <code>effective_date</code>, <code>department</code>, <code>source_title</code>; параметры HNSW <code>m=16</code>, <code>ef=128</code> установлены</td><td>PR</td></tr>
+          <tr><td class="name">Backend → Embedding / Reranker</td><td>Запрос эмбеддится той же моделью, что и индекс (версия сверяется по payload); реранжинг сужает 20 кандидатов до 3</td><td>PR</td></tr>
+          <tr><td class="name">Backend → LLM Gateway</td><td>Поток SSE проходит через два сервиса без буферизации целиком: первый токен доходит до Backend раньше, чем провайдер закончил генерацию. Это единственный тест, который ловит нарушение правила 4.3 на стыке</td><td>PR</td></tr>
+          <tr><td class="name">LLM Gateway → Provider</td><td>Порядок quota-first соблюдается на живом стыке; при 429 обращения к провайдеру не происходит; при таймауте провайдера возвращается 504, а не 500</td><td>PR</td></tr>
+          <tr><td class="name">Backend → Session State Store</td><td>Состояние FSM и аудит-лог сохраняются и переживают перезапуск сервиса; <code>session_id</code> работает уже на Этапе 1, в чистом RAG-режиме (закрытая находка F2)</td><td>PR</td></tr>
+          <tr><td class="name">Gateway → ClickHouse</td><td><code>pii_report</code> и <code>quality_report</code> записываются асинхронно и не задерживают ответ абоненту; сырых ПДн в записи нет</td><td>ночь</td></tr>
+          <tr><td class="name">ETL Worker → Vector DB</td><td>Upsert доходит; tombstones по <code>source_id</code> удаляют чанки исчезнувшего документа; переключение alias blue-green происходит только после полного успеха</td><td>ночь</td></tr>
+          <tr><td class="name">ETL Worker → Sync State</td><td>Delta-индексация переиндексирует только изменённые документы: повторный прогон без изменений в источнике не создаёт ни одной операции эмбеддинга</td><td>ночь</td></tr>
+          <tr><td class="name">Оркестратор → адаптеры (Этап 2)</td><td>HITL Gate — единственный путь к записи: попытка вызвать адаптер напрямую, минуя гейт, отклоняется на уровне оркестратора, а не на уровне адаптера</td><td>ночь</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Почему стык «Backend → LLM Gateway» вынесен в гейт PR, а не в ночной прогон.</b> Streaming Loop — жёсткое правило (4.3), но ломается он незаметно: достаточно одной обёртки, которая собирает генератор в список перед отдачей, и функционально всё продолжает работать — ответ доходит, тесты зелёные, только абонент видит паузу вместо печати. Такую регрессию ловит лишь измерение времени до первого токена на живом стыке, поэтому она стоит в блокирующем гейте.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="e2e">
+    <h2>6. L4 — сквозные сценарии по диаграммам последовательностей</h2>
+    <p class="dek">Источник сценариев — <code>C4_Sequence_Diagrams.drawio</code>: по поправке к разделу 6.1 контекста именно диаграмма является источником истины по сценарию, а текст — её пересказом. Тест пишется с диаграммы, а не с текста.</p>
+
+    <h3>6.1. Этап 1 — восемь сценариев</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Сценарий</th><th>Критерий прохождения</th></tr></thead>
+        <tbody>
+          <tr><td class="name">E1</td><td>Happy path: вопрос по базе знаний</td><td>Ответ доходит потоком; в <code>metadata</code> есть источники, <code>confidence_score</code>, <code>suggested_actions</code>, дисклеймер; состояние сессии сохранено</td></tr>
+          <tr><td class="name">E2</td><td>Низкая релевантность — <code>score &lt; 0.7</code></td><td>Срабатывает fallback без LLM: абонент получает запасной ответ и предложение выбрать тип обращения вручную; генерация не вызывается вовсе</td></tr>
+          <tr><td class="name">E3</td><td>Пустая база знаний по типу обращения</td><td>Тот же fallback; в ответе нет выдуманных источников — <code>sources</code> пуст, а не заполнен «похожими»</td></tr>
+          <tr><td class="name">E4</td><td>LLM недоступна на шаге классификации</td><td>Triage уходит в keyword-режим и возвращает тип из справочника (регрессия дефекта 11.8); сценарий доходит до ответа, а не падает</td></tr>
+          <tr><td class="name">E5</td><td>Превышение квоты</td><td>Gateway отдаёт 429 + <code>Retry-After</code>; виджет повторяет запрос по истечении интервала; повтор проходит успешно</td></tr>
+          <tr><td class="name">E6</td><td>Провайдер недоступен / таймаут</td><td>502 и 504 соответственно, тело RFC 7807, <code>trace_id</code> совпадает с <code>X-Trace-Id</code> запроса; поток закрывается событием <code>error</code>, а не обрывом</td></tr>
+          <tr><td class="name">E7</td><td>Guardrails обрывает поток при нарушении</td><td>Абонент получает safe fallback; частично отданные токены не остаются на экране как валидный ответ; факт блокировки попадает в счётчик с причиной</td></tr>
+          <tr><td class="name">E8</td><td>Вопрос с ПДн в тексте</td><td>Сквозная проверка: в исходящем запросе к провайдеру ПДн отсутствуют, в логе только <code>pii_report</code>, при этом ответ абоненту остаётся осмысленным</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>6.2. Этап 2 — шесть сценариев</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Сценарий</th><th>Критерий прохождения</th></tr></thead>
+        <tbody>
+          <tr><td class="name">E9</td><td>Полный write-путь с подтверждением</td><td>Черновик → Draft Validator (шаг 17a) → показ абоненту → подтверждение → запись → ID заявки и следующие шаги. Аудит содержит все переходы</td></tr>
+          <tr><td class="name">E10</td><td>Отказ абонента на подтверждении</td><td>Ни одной операции записи не выполнено; отказ зафиксирован в аудите с явной пометкой, что write не производился</td></tr>
+          <tr><td class="name">E11</td><td>Неполный черновик</td><td>Draft Validator не пропускает: обязательные слоты <code>full_name</code>, <code>account_number</code>, <code>reason</code> запрашиваются Form Agent, до HITL Gate сценарий не доходит</td></tr>
+          <tr><td class="name">E12</td><td>Повтор подтверждения (двойной клик, ретрай сети)</td><td>Idempotency-Key срабатывает: вторая операция не создаётся, абоненту возвращается результат первой</td></tr>
+          <tr><td class="name">E13</td><td>Доставка готового документа</td><td>Путь целиком: рендер → хранилище → ссылка → Render API → оркестратор → Backend → виджет → Document Panel в ленте диалога. Проверяется именно последнее звено — то, что было пробелом до версии 4.5</td></tr>
+          <tr><td class="name">E14</td><td>Аварийное обращение</td><td><code>inquiry_type = emergency</code> регистрируется и как обращение в микросервисе, и как заявка в Диспетчерской — оба следа присутствуют</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finding">
+      <h3>Р6 блокирует сценарий E14 — и это нужно решить до код-шага 9</h3>
+      <p>Разбор диаграмм последовательностей вскрыл семь расхождений Р1–Р7, и Р6 напрямую упирается в тестирование: <b>компенсация при частичном отказе двух write-путей не спроектирована</b>. Если обращение в микросервисе зарегистрировано, а заявка в Диспетчерскую не ушла — что происходит? Пока на этот вопрос нет ответа в архитектуре, тест E14 невозможно написать: у него нет определённого ожидаемого результата.</p>
+      <p>Это не пробел плана тестирования, а незакрытое проектное решение, которое план тестирования обнажает. То же касается Р4 (проверка <code>subscriber_id</code>): на диаграммах C3 Backend, Billing Adapter и Сервиса работы с обращениями проверка уже описана, но код-шага, который её реализует, ещё нет — тест S1 раздела 7 существует именно для того, чтобы её нельзя было пропустить.</p>
+    </div>
+
+    <div class="note">
+      <b>Р3 закрывается этим документом частично.</b> Расхождение Р3 гласит: сценарии ошибок (429, 502, 504, блокировка Guardrails) не описаны ни в одном документе проекта. Сценарии E5, E6 и E7 выше — это их описание с точки зрения ожидаемого поведения. Оставшаяся часть Р3 — таблица соответствия «ошибка → тело RFC 7807 → поведение виджета» в самой спецификации API — остаётся открытой (раздел 15).
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="security">
+    <h2>7. S — тесты безопасности</h2>
+    <p class="dek">Два источника требований: STRIDE-разбор раздела 24.5 контекста, где две угрозы из шести помечены как незакрытые, и требования 152-ФЗ. Четыре сценария атак на промпт уже описаны в плане тестирования RAG и здесь не повторяются — ниже то, чего в нём нет.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Угроза</th><th>Тест</th><th>Критерий</th></tr></thead>
+        <tbody>
+          <tr><td class="name">S1</td><td><b>Spoofing</b> — подмена <code>subscriber_id</code> в запросе</td><td>Запрос с <code>subscriber_id</code>, не принадлежащим аутентифицированной сессии, на каждом write-вызове Billing Adapter и Сервиса работы с обращениями</td><td>Отклонено с 401/403 <b>до</b> обращения к внешней системе; попытка зафиксирована в аудите</td></tr>
+          <tr><td class="name">S2</td><td><b>IDOR</b> — операция над данными чужого абонента</td><td>Подтверждение чужого черновика; чтение баланса чужого лицевого счёта; получение ссылки на чужой документ</td><td>Все три отклонены. Ссылка на документ не угадывается перебором и не действует для другой сессии</td></tr>
+          <tr><td class="name">S3</td><td><b>Tampering</b> — сырые ПДн уходят наружу</td><td>Перехват исходящего трафика к провайдеру на корпусе запросов, содержащих все шесть типов сущностей в разных форматах написания</td><td><b>Ноль</b> совпадений с исходными значениями в теле запроса к провайдеру и в логах. Единственная запись — <code>pii_report</code> с типами</td></tr>
+          <tr><td class="name">S4</td><td><b>Repudiation</b> — операция без следа</td><td>Для каждого write-сценария Этапа 2 и для каждого отказа абонента — проверка наличия записи в аудите с временем, идентификатором сессии и результатом</td><td>Аудит полон: количество записей равно количеству попыток, включая отклонённые</td></tr>
+          <tr><td class="name">S5</td><td><b>DoS</b> — всплеск от одного абонента</td><td>Превышение лимита на абонента, на сессию и глобального лимита сервиса — три отдельных сценария</td><td>Каждый даёт 429 + <code>Retry-After</code>; обслуживание других абонентов не деградирует</td></tr>
+          <tr><td class="name">S6</td><td><b>Elevation</b> — доступ без внутреннего токена</td><td>Вызов <code>/v1/generate</code> без <code>X-Internal-Token</code> и с чужим токеном; вызов <code>/v1/healthz</code> с попыткой получить больше, чем статус</td><td>401 в первых двух случаях; healthz не раскрывает версий, адресов и конфигурации</td></tr>
+          <tr><td class="name">S7</td><td>Утечка ПДн <b>в ответе</b> модели</td><td>Провокация ответа, содержащего ПДн другого абонента, попавшие в контекст</td><td>Sync-проверка Guardrails обрывает поток; счётчик блокировок с причиной <code>pii_leak</code> увеличивается на единицу</td></tr>
+          <tr><td class="name">S8</td><td>Биометрия в корпусе дообучения</td><td>Попытка запустить сборку корпуса с источником 10 (расшифровки колл-центра) без зафиксированного письменного согласия</td><td>Пайплайн отказывается стартовать. PII-фильтр этот тест <b>не</b> закрывает: обезличивание не заменяет согласия по ст. 11 152-ФЗ</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Как измерить «PII filtering — 100%» из DoD.</b> Абсолютное «100%» непроверяемо в общем виде: нельзя доказать отсутствие пропуска на всех возможных входах. Проверяемая формулировка, которая и берётся критерием приёмки: <b>ноль пропусков на фиксированном корпусе</b> из не менее чем 200 синтетических запросов, покрывающем шесть типов сущностей минимум в трёх форматах написания каждый, включая склеенные и разорванные пробелами варианты; корпус версионируется вместе с Golden Set. Плюс прод-инвариант: счётчик <code>pii_leak</code> строго равен нулю, любое ненулевое значение — миссия-критичный алерт. Замена абсолютного требования на измеримое зафиксирована здесь явно, чтобы в ТЗ не попало непроверяемое обещание.
+    </div>
+
+    <div class="note warn">
+      <b>S1 и S2 закрывают то, что STRIDE-разбор оставил открытым.</b> В разделе 24.5 контекста Spoofing и IDOR — единственные две угрозы со статусом «не описано»; в разделе 13 они добавлены как риски, но без защитных мер. Диаграммы C3 версии 4.5 проверку уже описывают, а список задач этого не зафиксировал. Тесты S1–S2 — то, что переводит проверку из описания в обязательство.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="load">
+    <h2>8. P — нагрузочные тесты и устойчивость</h2>
+    <p class="dek">Профиль нагрузки не задаётся волевым решением — он берётся из отчёта по мощностям, где выведен из числа абонентов. Это же снимает соблазн «нагрузить посильнее»: смысл теста в проверке DoD на расчётной нагрузке, а не в поиске точки отказа ради цифры.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Профиль</th><th>λ (RPS)</th><th>L</th><th>Длительность</th><th>Что доказывает</th></tr></thead>
+        <tbody>
+          <tr><td class="name">MVP, базовый</td><td class="num">0,025</td><td class="num">0,08</td><td class="num">30 мин</td><td>DoD держится на реальной нагрузке одного города (10 000 абонентов)</td></tr>
+          <tr><td class="name">Тираж, базовый</td><td class="num">0,25</td><td class="num">0,75</td><td class="num">30 мин</td><td>DoD держится на 100 000 абонентов — целевой масштаб</td></tr>
+          <tr><td class="name">Тираж, высокий</td><td class="num">≈ 1,07</td><td class="num">3,2</td><td class="num">30 мин</td><td>Верхняя граница разброса допущений A1–A3 (25×) не ломает систему</td></tr>
+          <tr><td class="name">Стресс</td><td class="num">5,0</td><td class="num">15</td><td class="num">10 мин</td><td>Точка деградации: где именно перестаёт держаться TTFT. Соответствует ≈ 2 млн абонентов — заведомо за пределами проекта, берётся как запас прочности</td></tr>
+          <tr><td class="name">Soak</td><td class="num">0,25</td><td class="num">0,75</td><td class="num">8 ч</td><td>Утечки памяти, рост числа соединений, распухание Session State за длительный прогон</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Обычный HTTP-нагрузчик здесь не подходит.</b> Ключевая метрика DoD — TTFT, время до <b>первого токена</b>, а не до конца ответа. Инструмент обязан уметь читать SSE-поток и засекать время первого события, иначе он измерит полное время ответа и покажет «всё в порядке» при нарушенном TTFT. Поэтому выбран <b>Locust</b>: он на Python, совпадает со стеком проекта, и позволяет написать клиент, который явно фиксирует момент первого события <code>token</code>. k6 рассматривался и отклонён — SSE в нём поддерживается ограниченно, а самописный обработчик на JS дублировал бы логику виджета на другом языке.
+    </div>
+
+    <h3>8.1. Что измеряется</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Метрика</th><th>Порог</th><th>Источник</th></tr></thead>
+        <tbody>
+          <tr><td class="name">TTFT, p95</td><td class="num">&lt; 500 мс</td><td>DoD, раздел 18</td></tr>
+          <tr><td class="name">Полный ответ, p95</td><td class="num">&lt; 3 с</td><td>DoD, раздел 18</td></tr>
+          <tr><td class="name">Vector Search, P99</td><td class="num">&lt; 100 мс</td><td>DoD, раздел 18</td></tr>
+          <tr><td class="name">Guardrails sync</td><td class="num">&lt; 50 мс</td><td>раздел 35.1</td></tr>
+          <tr><td class="name">Доля ошибок</td><td class="num">&lt; 1%</td><td>порог алерта дашборда — 5% как критический, для теста берётся строже</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Сегмент провайдера измеряется отдельно от нашего.</b> На MVP генерацию выполняет внешний управляемый API, и его латентность мы не контролируем. Если мерить только сквозной TTFT, любое ухудшение у провайдера будет выглядеть как регрессия нашего кода. Поэтому тест разделяет два измерения: «Backend + Gateway без провайдера» (наш накладной расход, для него и ставится гейт) и «сегмент Gateway → Provider» (наблюдаем, но гейтом не делаем). Ровно то же разделение уже сделано в дашборде наблюдаемости.
+    </div>
+
+    <div class="note">
+      <b>Нагрузка не гоняется по платному API.</b> Массовые прогоны идут на локальной тестовой модели (код-шаг 0.5), подключённой как ещё один backend конфигом. Отдельно выполняется один короткий калибровочный прогон против реального провайдера, чтобы знать поправку на его латентность. Иначе нагрузочное тестирование стало бы отдельной статьёй расхода токенов — при том, что расход токенов и так единственная статья, растущая болезненно.
+    </div>
+
+    <h3>8.2. Тест конкуренции за GPU — он же измерение для ADR-005</h3>
+    <div class="finding">
+      <h3>Единственный тест, который переводит ADR из Proposed в Accepted</h3>
+      <p>Находка F7 — конкуренция за GPU между офлайн-ETL и онлайн-ретривалом — закрыта решением «окно обслуживания 02:00–05:00». Но ADR-005 не может стать Accepted, пока не измерены две величины: <b>длительность полного реиндекса</b> и <b>дневной delta-объём</b>. Обе измеряются одним прогоном.</p>
+      <p><b>Сценарий:</b> запустить полный реиндекс синтетической базы знаний и одновременно подать онлайн-нагрузку профиля «тираж, базовый». <b>Проверяется:</b> укладывается ли реиндекс в <code>activeDeadlineSeconds = 10800</code>; держится ли P99 поиска и TTFT при одновременной работе обоих контуров; корректно ли прерывается job при выходе за границу окна и продолжается ли работа с курсоров Sync State в следующем прогоне.</p>
+      <p>Отдельная проверка условия пересмотра ADR-005: замерить дневной delta-объём и оценить, при каком объёме он перестаёт укладываться в трёхчасовое окно — это и есть порог перехода на два раздельных GPU-пула, который сейчас в ADR сформулирован качественно.</p>
+    </div>
+
+    <h3>8.3. Устойчивость к отказам</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Отказ</th><th>Ожидаемое поведение</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Провайдер LLM недоступен</td><td>Circuit Breaker размыкается, срабатывает fallback-провайдер по конфигурации LiteLLM; при отказе обоих — 502 в RFC 7807, а не зависание</td></tr>
+          <tr><td class="name">Vector DB недоступна</td><td>Ответ без контекста не генерируется: срабатывает fallback без LLM. Выдумывать ответ без источников запрещено</td></tr>
+          <tr><td class="name">Embedding Inference недоступен</td><td>Онлайн-путь уходит в fallback без LLM. Внешний fallback эмбеддингов на онлайн-пути запрещён — он обошёл бы барьер ПДн</td></tr>
+          <tr><td class="name">Redis (квоты, сессии) недоступен</td><td>Явно определить: сервис отклоняет запросы или работает без квот. Сейчас в проекте решения нет — открытый пункт, раздел 15</td></tr>
+          <tr><td class="name">ClickHouse недоступен</td><td>Ответ абоненту не задерживается; телеметрия буферизуется или теряется, но не блокирует синхронный путь</td></tr>
+          <tr><td class="name">Отказ одного из двух write-путей Этапа 2</td><td>Не определено — расхождение Р6. До проектного решения тест не пишется</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="data">
+    <h2>9. D — тесты данных и ETL</h2>
+    <p class="dek">От качества индекса напрямую зависит Recall@3 из DoD. Ошибка на этом уровне не проявляется ни падением, ни ошибкой в логе — только тем, что поиск перестаёт находить нужное.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Проверка</th><th>Критерий</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Полнота метаданных</td><td>Каждый чанк в индексе имеет непустые <code>inquiry_type</code>, <code>department</code>, <code>effective_date</code>, <code>source_title</code>, <code>source_url</code>, <code>document_version</code>. Ноль чанков без метаданных</td></tr>
+          <tr><td class="name">Валидность таксономии в индексе</td><td>Все значения <code>inquiry_type</code> в payload принадлежат справочнику из 10 кодов. Любое постороннее значение — провал</td></tr>
+          <tr><td class="name">Версия модели эмбеддингов</td><td>Версия записана в payload каждого вектора. При несовпадении с моделью запроса ответ по такому контексту <b>не выдаётся</b>: запрос уходит в fallback без LLM, поднимается миссия-критичный алерт, причина пишется в отчёт качества</td></tr>
+          <tr><td class="name">Чанкинг</td><td>Размер чанка около 800 токенов, overlap присутствует, границы уважают заголовки — проверяется на эталонном документе с известной структурой</td></tr>
+          <tr><td class="name">Дедупликация</td><td>Дубликат документа не порождает два независимых чанка в выдаче; из кластера near-duplicate в индекс попадает один представитель</td></tr>
+          <tr><td class="name">Только очищенные данные</td><td>В Vector DB нет сырья из Data Lake напрямую — в индекс попадает результат после Dedup и отбора представителя</td></tr>
+          <tr><td class="name">Delta-индексация</td><td>Повторный прогон без изменений в источнике не выполняет ни одной операции эмбеддинга — курсоры и контрольные суммы Sync State работают</td></tr>
+          <tr><td class="name">Blue-green реиндекс</td><td>Поиск отвечает непрерывно в течение всего реиндекса; alias переключается только после полного успеха; прерванный job не оставляет полуиндекс</td></tr>
+          <tr><td class="name">Tombstones</td><td>Удалённый в источнике документ исчезает из выдачи после следующего прогона</td></tr>
+          <tr><td class="name">Обезличивание до записи</td><td>Корпус для дообучения проходит PII-фильтр <b>до</b> попадания в любое хранилище — проверяется тем, что в сыром слое нет ни одного совпадения с исходными ПДн</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="obs">
+    <h2>10. O — наблюдаемость как объект тестирования</h2>
+    <p class="dek">Дашборд и девять алертов уже спроектированы, но метрики пока не эмитятся кодом — это открытый пункт списка задач. Пока метрики не проверяются тестом, дашборд остаётся спецификацией, а не инструментом.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Проверка</th><th>Критерий</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Конвенция имён</td><td>При локальном scrape присутствуют все метрики, на которые ссылаются виджеты дашборда — включая <code>assistant_ttft_seconds</code>, <code>llm_gateway_tokens_total</code> и <code>guardrails_blocked_total</code>. Отсутствие любой — провал: виджет будет пустым в проде</td></tr>
+          <tr><td class="name">Разбивка блокировок по причинам</td><td><code>guardrails_blocked_total</code> имеет метку причины, и значение <code>pii_leak</code> реально появляется в сценарии S7. Без этого миссия-критичный виджет «Утечка ПДн в ответе» не работает</td></tr>
+          <tr><td class="name">Разделение GPU по контурам</td><td>Утилизация GPU размечена по типу нагрузки — ETL и онлайн-инференс различимы. Иначе виджет Saturation не показывает конкуренцию, ради которой сделан</td></tr>
+          <tr><td class="name">Правила алертов</td><td>Все девять правил прогоняются <code>promtool test rules</code> на синтетических временных рядах: срабатывают при нарушении и не срабатывают при норме</td></tr>
+          <tr><td class="name">Трассировка</td><td><code>X-Trace-Id</code> сквозной: один идентификатор связывает запись виджета, Backend, Gateway и запись в аналитике</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="testdata">
+    <h2>11. Тестовые данные и окружения</h2>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Набор</th><th>Объём</th><th>Источник</th><th>Требование</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Синтетическая база знаний</td><td>≈ 1000 документов</td><td>Генератор код-шага 0 по структуре CSV-примеров</td><td>Покрыты все 10 типов таксономии; структура повторяет реальную, содержимое — нет</td></tr>
+          <tr><td class="name">Golden Set</td><td>50–100 вопросов</td><td>Собирается на код-шаге 10</td><td>Все типы + пограничные случаи; версионируется; та же версия эмбеддингов, что в индексе</td></tr>
+          <tr><td class="name">Корпус ПДн</td><td>≥ 200 запросов</td><td>Создаётся вместе с шагом 3</td><td>Шесть типов сущностей × минимум три формата написания. Синтетические значения, проходящие валидацию формата</td></tr>
+          <tr><td class="name">Корпус атак</td><td>≈ 40 сценариев</td><td>Создаётся вместе с шагом 3</td><td>Prompt injection, попытки раскрыть системный промпт, провокации токсичности, попытки получить чужие данные</td></tr>
+          <tr><td class="name">Слепки внешних систем</td><td>по одному на систему</td><td>Записанные ответы дублей</td><td>Биллинг, микросервис обращений, Диспетчерская — сигнатуры помечены как допущение до сверки с владельцами</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Синтетика проходит через тот же PII-фильтр, что и продовый трафик.</b> Не потому, что в ней есть ПДн, а потому что генератор может случайно воспроизвести реальный паттерн — например, валидный СНИЛС или существующий номер телефона. Проверка обязательна на выходе генератора, до попадания данных в репозиторий. Реальные записи абонентов не попадают в тестовые данные ни при каких условиях.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="gates">
+    <h2>12. Гейты — что и когда блокирует</h2>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Момент</th><th>Состав</th><th>Блокирует</th><th>Бюджет времени</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Pull Request</td><td>Линтеры · L1 полностью · L2 контрактные · L3 короткий набор · S быстрые (S1, S2, S3, S6) · O конвенция имён · Q подвыборка Golden Set</td><td>merge</td><td class="num">&lt; 10 мин</td></tr>
+          <tr><td class="name">Ночной прогон</td><td>L3 полностью · L4 все 14 сценариев · S полностью · D полностью · Q весь Golden Set</td><td>ничего автоматически; провал — задача с утра</td><td class="num">&lt; 60 мин</td></tr>
+          <tr><td class="name">Пред-релиз</td><td>Всё из ночного + P профили MVP и тираж + тест конкуренции за GPU</td><td>релиз</td><td class="num">≈ 3 ч</td></tr>
+          <tr><td class="name">После деплоя</td><td>Smoke: <code>/v1/healthz</code>, один сквозной запрос, проверка появления метрик</td><td>откат</td><td class="num">&lt; 2 мин</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Правило регрессии наследуется из плана тестирования RAG:</b> деградация любой ключевой метрики более чем на 5% от базовой линии — блокирующая регрессия. Здесь оно расширяется на нагрузочные метрики: рост TTFT p95 более чем на 5% относительно предыдущего пред-релизного прогона тоже блокирует релиз, потому что иначе деградация накапливается незаметными шагами, каждый из которых по отдельности укладывается в порог DoD.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="acceptance">
+    <h2>13. Критерии приёмки — DoD в проверяемой форме</h2>
+    <p class="dek">Это таблица-мост к ТЗ: фаза 5 плана сборки требует, чтобы критериями приёмки стали DoD раздела 18 плюс пороги плана тестирования. Здесь каждый пункт DoD получает тест, который его доказывает.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Пункт DoD</th><th>Чем доказывается</th><th>Готовность</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Ответ по базе знаний</td><td>E1</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">Ответ содержит источники</td><td>E1 + контрактная проверка полноты метаданных</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">Ответ содержит suggested_actions</td><td>E1 + контрактная проверка</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">Fallback при пустой базе</td><td>E3</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">Fallback при низкой уверенности</td><td>E2</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">ПДн не уходят в LLM Provider</td><td>S3 + E8 на корпусе ≥ 200 запросов</td><td><span class="pill warn">переформулирован</span></td></tr>
+          <tr><td class="name">Ошибки в RFC 7807</td><td>Контрактные тесты на 400/401/429/502/504</td><td><span class="pill warn">спека не доведена</span></td></tr>
+          <tr><td class="name">Streaming до виджета</td><td>Интеграционный тест стыка + E1</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">/v1/healthz отвечает</td><td>Контрактный тест + smoke после деплоя</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">TTFT &lt; 500 мс</td><td>Профили P на λ MVP и тиража, с отделением сегмента провайдера</td><td><span class="pill warn">нужна калибровка</span></td></tr>
+          <tr><td class="name">Полный ответ &lt; 3 с</td><td>Те же профили</td><td><span class="pill warn">нужна калибровка</span></td></tr>
+          <tr><td class="name">P99 поиска &lt; 100 мс</td><td>Профили P + тест конкуренции за GPU</td><td><span class="pill good">тест определён</span></td></tr>
+          <tr><td class="name">Recall@3 &gt; 90%</td><td>План тестирования RAG, ночной батч по Golden Set</td><td><span class="pill crit">нет Golden Set</span></td></tr>
+          <tr><td class="name">PII filtering 100%</td><td>Ноль пропусков на фиксированном корпусе + прод-инвариант нулевого счётчика утечек</td><td><span class="pill warn">переформулирован</span></td></tr>
+          <tr><td class="name">Uptime по SLA</td><td>Не проверяется — SLA в проекте не сформулирован</td><td><span class="pill crit">нет требования</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Два пункта DoD не готовы служить критериями приёмки как написаны.</b> «PII filtering 100%» непроверяемо в абсолютной форме и заменено измеримой формулировкой раздела 7. «Uptime согласно SLA» ссылается на документ, которого в проекте нет — либо появляется SLA с числом, либо пункт убирается из DoD, чтобы не создавать видимость требования.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="excluded">
+    <h2>14. Что не тестируется на этом проекте — и что для этого нужно</h2>
+    <p class="dek">Раздел существует, чтобы отсутствие этих проверок читалось как зафиксированное ограничение, а не как забытый пункт.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Не проверяется</th><th>Причина</th><th>Что потребуется</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Интеграция с реальными Биллингом, ЛК, БД обращений, БД ЛКК, файловым хранилищем</td><td>Закрытая сеть водоканала, доступа нет ни на разработке, ни на демонстрации</td><td>Стенд внутри периметра и учётные записи с целевым RBAC</td></tr>
+          <tr><td class="name">Целевой RBAC на реальных системах</td><td>То же</td><td>То же; сейчас описывается на бумаге</td></tr>
+          <tr><td class="name">Производительность self-hosted-контура на A100</td><td>Оборудования нет; конфигурация тиража остаётся расчётной</td><td>Доступ к целевой GPU для эмпирического замера времени генерации при batch = 1</td></tr>
+          <tr><td class="name">Нагрузка против реального провайдера в масштабе</td><td>Прямой расход токенов; расход — единственная болезненно растущая статья бюджета</td><td>Бюджет на нагрузочные прогоны либо согласованная тестовая квота провайдера</td></tr>
+          <tr><td class="name">Качество ответов на реальных обращениях</td><td>Реальных обращений нет — Golden Set собирается из синтетики</td><td>Выгрузка обезличенных обращений с согласованием ИБ</td></tr>
+          <tr><td class="name">Компенсация при частичном отказе двух write-путей</td><td>Проектного решения не существует (расхождение Р6)</td><td>Решение до код-шага 9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="open">
+    <h2>15. Открытые пункты, которые вскрыл этот план</h2>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Пункт</th><th>Почему важно</th><th>Приоритет</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Довести спецификацию API — семь остаточных проблем раздела 7.6</td><td>Контрактные тесты пишутся против спецификации; пока в ней <code>servers: localhost</code> как production и нет схемы события <code>error</code>, тесты закрепят её дефекты</td><td><span class="pill crit">до код-шага 8</span></td></tr>
+          <tr><td class="name">Решить Р6 — компенсация при частичном отказе write-путей</td><td>Без ответа сценарий E14 не имеет ожидаемого результата</td><td><span class="pill crit">до код-шага 9</span></td></tr>
+          <tr><td class="name">Определить поведение при недоступности Redis</td><td>Квоты и сессии живут в нём; сейчас поведение не описано ни одним документом</td><td><span class="pill warn">до код-шага 4</span></td></tr>
+          <tr><td class="name">Заменить «PII 100%» и «Uptime по SLA» в DoD измеримыми формулировками</td><td>Иначе в ТЗ попадут непроверяемые обещания</td><td><span class="pill warn">до фазы 5</span></td></tr>
+          <tr><td class="name">Исправить имена файлов RAG-плана и дашборда в контексте</td><td>Разделы 36, 37, 38.1 ссылаются на несуществующие имена</td><td><span class="pill warn">правка контекста</span></td></tr>
+          <tr><td class="name">Согласие на биометрию для источника 10</td><td>Тест S8 отклонит сборку корпуса без него; без согласия источник нельзя брать в принципе</td><td><span class="pill warn">до Этапа 3</span></td></tr>
+          <tr><td class="name">Сверить сигнатуры внешних API с владельцами систем</td><td>Дубли построены на допущениях; расхождение обнаружится только на реальном стенде</td><td><span class="pill warn">P1</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Что этот план закрывает в списке задач проекта:</b> строку матрицы сдачи «План тестирования (весь проект)»; частично расхождение Р3 — сценарии ошибок получили описание ожидаемого поведения; риски Spoofing и IDOR из STRIDE-разбора получили проверяемые тесты S1–S2; измерения, необходимые ADR-005 для перехода в Accepted, получили конкретный сценарий прогона.
+    </div>
+  </section>
+
+  <footer>
+    Основано на <code>контекст_4.md</code> (v4.5): DoD — раздел 18; API-контракт — раздел 7; дефекты прототипа — раздел 11; STRIDE — раздел 24.5; Security Layer — раздел 35; окно обслуживания — раздел 40. Профили нагрузки — <code>Capacity_Report.html</code>. Сценарии — <code>C4_Sequence_Diagrams.drawio</code> и <code>Sequence_Diagrams.md</code> (расхождения Р1–Р7). Качество RAG — <code>dz6/План теста RAG.html</code>, метрики и алерты — <code>dz6/Дашборды.html</code>.
+  </footer>
+
+</div>

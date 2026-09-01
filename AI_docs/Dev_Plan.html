@@ -1,0 +1,883 @@
+<meta charset="utf-8">
+<title>План разработки</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6FAFB; --surface:#FFFFFF; --surface-2:#EAF2F3; --ink:#10202A; --ink-muted:#4C6169;
+    --line:#D7E3E6; --accent:#0E7C86; --accent-ink:#063A40; --accent-2:#2C5DA8;
+    --good:#1B8F5E; --warn:#A66A12; --crit:#B33D26;
+    --good-bg:#E4F5EC; --warn-bg:#FBF0DC; --crit-bg:#FBE6E1;
+    --shadow: 0 1px 2px rgba(16,32,42,0.06), 0 10px 28px -14px rgba(16,32,42,0.22);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+      --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+      --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+      --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+    --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+    --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+    --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:"Public Sans","Segoe UI",sans-serif; font-size:16px; line-height:1.65; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif; font-weight:700; color:var(--ink); text-wrap:balance; margin:0;}
+  code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.92em;}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 28px 110px;}
+  .titlebar{padding:52px 28px 34px; border-bottom:1px solid var(--line); background:var(--surface);}
+  .titlebar-inner{max-width:1000px; margin:0 auto;}
+  .titlebar h1{font-size:clamp(1.8rem,4vw,2.3rem); letter-spacing:-.01em;}
+  .titlebar p{color:var(--ink-muted); margin-top:12px; max-width:680px; font-size:1.02rem;}
+  section.block{padding-top:52px;}
+  .block h2{font-size:1.35rem; margin-bottom:6px;}
+  .block h3{font-size:1.05rem; margin:26px 0 6px;}
+  .block .dek{color:var(--ink-muted); max-width:720px; margin-top:8px; font-size:14.5px;}
+  .table-wrap{overflow-x:auto; margin-top:18px;}
+  table.spec{width:100%; border-collapse:collapse; font-size:13.6px; min-width:640px;}
+  table.spec th{text-align:left; font-family:"JetBrains Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); padding:0 11px 9px; border-bottom:2px solid var(--line); white-space:nowrap;}
+  table.spec td{padding:10px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.spec tr:last-child td{border-bottom:none;}
+  table.spec td.name{font-weight:600;}
+  table.spec td.num{font-family:"JetBrains Mono",monospace; text-align:right; white-space:nowrap;}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; font-family:"JetBrains Mono",monospace; white-space:nowrap;}
+  .pill.good{color:var(--good); background:var(--good-bg);}
+  .pill.warn{color:var(--warn); background:var(--warn-bg);}
+  .pill.crit{color:var(--crit); background:var(--crit-bg);}
+  .note{margin-top:16px; padding:13px 16px; border-radius:8px; font-size:14px; background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--accent); color:var(--ink);}
+  .note.crit{border-left-color:var(--crit);}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--accent-ink);}
+  .formula{font-family:"JetBrains Mono",monospace; font-size:13px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 15px; margin-top:12px; overflow-x:auto; color:var(--ink); white-space:pre; line-height:1.5;}
+  .finding{background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--crit); border-radius:9px; padding:16px 19px; margin-top:16px; box-shadow:var(--shadow);}
+  .finding h3{margin:0 0 6px; font-size:1.08rem; color:var(--crit);}
+  .finding p{margin:6px 0 0; font-size:14.2px;}
+  .step{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px 21px; margin-top:20px; box-shadow:var(--shadow);}
+  .step .shead{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+  .step .snum{font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:700; color:#fff; background:var(--accent); border-radius:6px; padding:3px 9px;}
+  .step .stitle{font-family:"Zilla Slab",Georgia,serif; font-weight:700; font-size:1.14rem;}
+  .step .sfiles{font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--ink-muted); margin-top:6px;}
+  .step .sgoal{margin-top:10px; font-size:14.4px;}
+  .step h4{margin:16px 0 4px; font-size:12px; font-family:"JetBrains Mono",monospace; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); font-weight:600;}
+  .step ul{margin:4px 0 0; padding-left:20px; font-size:14px;}
+  .step li{margin:3px 0;}
+  .step .sdone{margin-top:14px; padding:10px 13px; border-radius:7px; background:var(--good-bg); color:var(--ink); font-size:13.8px; border-left:3px solid var(--good);}
+  .step .stime{font-family:"JetBrains Mono",monospace; font-size:11.5px; color:var(--ink-muted);}
+  hr.rule{border:none; border-top:1px solid var(--line); margin:48px 0 0;}
+  footer{margin-top:56px; padding:22px 0 0; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-muted);}
+</style>
+
+<div class="titlebar">
+  <div class="titlebar-inner">
+    <h1>План разработки</h1>
+    <p>Двенадцать шагов от пустого репозитория до работающего MVP: что пишется, какое ПО ставится, какие модели и доступы нужны, какими стартовыми данными наполняется система и как проверяется закрытие каждого шага. В конце — структура проекта и план запуска.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="block" id="how">
+    <h2>0. Как устроен план</h2>
+    <p class="dek">Фаза 6 плана сборки. Диаграммы (фаза 1) и решения ADR (фаза 2) уже зафиксированы — код пишется под них, а не параллельно с ними.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Принцип</th><th>Почему именно так</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Порядок шагов — от независимого к зависимому</td><td>Таксономия и схемы данных нужны всем; адаптеры Этапа 2 — никому. Обратный порядок заставил бы переписывать основание</td></tr>
+          <tr><td class="name">Шаг не закрыт, пока не прошла его проверка</td><td>Прототип уже один раз потребовал полного переписывания, потому что решения менялись после написания кода</td></tr>
+          <tr><td class="name">Всё на синтетике</td><td>Биллинг, ЛК, БД обращений, БД ЛКК и файловое хранилище — внутри закрытой сети. Ни на разработке, ни на демонстрации доступа к ним не будет</td></tr>
+          <tr><td class="name">Генерация ответов — внешняя модель</td><td>По ADR-002 на MVP генерирует управляемый API на территории РФ. Локальная модель нужна только для офлайн-проверок без трат на платный API</td></tr>
+          <tr><td class="name">Ничего «по аналогии»</td><td>Версии, размеры и сигнатуры, не подтверждённые документом проекта, помечены как <b>ДОПУЩЕНИЕ</b> и подлежат сверке</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Два блокера, которые нужно снять до начала кодирования.</b> Первый: <b>CSV-примеры структуры реальных систем ещё не получены</b> — без них шаг 0 строится на гипотезе о схеме, и при получении примеров генератор придётся переделывать. Второй: <b>спецификация API не доведена</b> — семь остаточных проблем раздела 7.6 контекста (в том числе <code>servers: localhost</code> как production и отсутствие схемы SSE-события <code>error</code>) делают шаг 8 работой по неточному контракту. Оба не останавливают шаги 0–7, но должны быть закрыты до шагов 8 и 9.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="tree">
+    <h2>1. Структура проекта</h2>
+    <p class="dek">Развёрнутая версия структуры из раздела 12.3 контекста: добавлены каталоги, которых требуют шаги 0, 0.5 и 10 — фикстуры, тесты, инфраструктура, документация решений.</p>
+
+    <div class="formula">vodokanal-assistant/
+├── pyproject.toml                 зависимости и настройки инструментов
+├── .env.example                   шаблон переменных окружения (без секретов)
+├── Makefile                       команды запуска: seed, index, run, test, smoke
+├── docker-compose.yml             Qdrant, Postgres, Redis, MinIO, ClickHouse
+├── README.md                      установка и запуск (шаг 11)
+│
+├── app/
+│   ├── config.py                  настройки из окружения                    шаг 1
+│   ├── taxonomy.py                справочник 10 типов + display names       шаг 1
+│   ├── models.py                  Pydantic-схемы запроса/ответа/сессии      шаг 1
+│   ├── fsm.py                     конечный автомат обращения                шаг 2
+│   ├── supervisor.py              оркестрация: FSM + агенты                 шаг 7
+│   ├── api.py                     FastAPI: /v1/generate, /v1/healthz        шаг 8
+│   ├── main.py                    точка входа                               шаг 8
+│   │
+│   ├── agents/
+│   │   ├── triage.py              классификация типа обращения              шаг 6
+│   │   ├── advisor.py             консультация по найденному контексту      шаг 6
+│   │   ├── form.py                запрос недостающих слотов                 шаг 6
+│   │   └── draft_validator.py     полнота черновика до подтверждения        шаг 6
+│   │
+│   ├── gateway/
+│   │   ├── llm_gateway.py         обёртка LiteLLM + квоты                   шаг 4
+│   │   ├── pii_filter.py          PII Sanitizer (Presidio + свои правила)   шаг 3
+│   │   ├── guardrails.py          sync-проверки ответа + async-оценка       шаг 3
+│   │   ├── quota.py               лимиты абонент/сессия/сервис, 429         шаг 4
+│   │   └── local_test_backend.py  локальная модель как backend LiteLLM      шаг 0.5
+│   │
+│   ├── vector/
+│   │   ├── vector_store.py        поиск с фильтром, порог, реранжинг        шаг 5
+│   │   └── embeddings.py          клиент эмбеддингов + версия модели        шаг 5
+│   │
+│   ├── adapters/
+│   │   ├── billing_adapter.py     XML-RPC Биллинга, HITL + идемпотентность  шаг 9
+│   │   ├── inquiry_service.py     API микросервиса обращений                шаг 9
+│   │   └── document_generator.py  рендер документа + ссылка                 шаг 9
+│   │
+│   ├── etl/
+│   │   ├── ingest.py              чтение документов базы знаний             шаг 5
+│   │   ├── splitter.py            чанкинг с overlap                         шаг 5
+│   │   └── indexer.py             upsert, tombstones, alias                 шаг 5
+│   │
+│   └── metrics/
+│       └── prometheus.py          метрики по конвенции дашборда             шаг 10
+│
+├── scripts/
+│   ├── generate_synthetic.py      генератор стартовых данных                шаг 0
+│   └── build_golden_set.py        сборка эталонного набора                  шаг 10
+│
+├── web/
+│   ├── index.html                 демо-стенд вместо личного кабинета        шаг 8.5
+│   ├── app.js                     чтение потока, лента, подтверждение       шаг 8.5
+│   └── style.css                                                            шаг 8.5
+│
+├── fixtures/                      стартовые данные (раздел 4)               шаг 0
+├── kb/                            синтетическая база знаний (.docx, .md)    шаг 0
+├── golden_set/                    эталонный набор + корпуса проверок        шаг 10
+│
+├── tests/
+│   ├── unit/  contract/  integration/  e2e/  security/  load/
+│   └── conftest.py
+│
+├── docs/
+│   └── model-choice.md            обоснование выбора локальной модели       шаг 0.5
+│
+└── deploy/
+    └── prometheus.yml             конфигурация сбора метрик                 шаг 10</div>
+
+    <div class="note">
+      <b>Отличия от раздела 12.3 контекста — и почему.</b> Добавлены <code>etl/</code> (ETL Worker — отдельный контейнер на L2, его код не может жить в <code>vector/</code>), <code>metrics/</code> (конвенция имён метрик — контракт дашборда), <code>agents/draft_validator.py</code> (по решению версии 4.5 это не Guardrails, а отдельный компонент оркестратора), <code>quota.py</code> вынесен из <code>llm_gateway.py</code> (порядок quota-first проще тестировать, когда квоты — отдельный модуль). <code>application_router.py</code> переименован в <code>inquiry_service.py</code> вслед за переименованием контейнера.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="software">
+    <h2>2. ПО — что установить</h2>
+    <p class="dek">Разделено на то, что ставится один раз на машину, и то, что приходит зависимостями проекта. Колонка «шаг» — когда впервые понадобится: раньше ставить не нужно.</p>
+
+    <h3>2.1. Системное — устанавливается на машину</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>ПО</th><th>Версия</th><th>Зачем</th><th>Шаг</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Python</td><td class="num">3.12</td><td>Язык всего проекта. 3.13 не берётся: часть ML-зависимостей под неё ещё без готовых сборок</td><td class="num">0</td></tr>
+          <tr><td class="name">uv</td><td class="num">≥ 0.4</td><td>Менеджер зависимостей и виртуального окружения. Альтернатива — Poetry; выбор не принципиален, но фиксируется один на проект</td><td class="num">0</td></tr>
+          <tr><td class="name">Git</td><td class="num">любая</td><td>Репозиторий проекта; на Windows заодно даёт Git Bash для <code>make</code></td><td class="num">0</td></tr>
+          <tr><td class="name">Docker Desktop</td><td class="num">≥ 4.30</td><td>Qdrant, Postgres, Redis, MinIO, ClickHouse — всё поднимается контейнерами, не ставится на машину</td><td class="num">0</td></tr>
+          <tr><td class="name">Ollama</td><td class="num">≥ 0.3</td><td>Рантайм локальной тестовой модели. Даёт HTTP-API, который LiteLLM подключает как обычного провайдера — обёртка получается тонкой</td><td class="num">0.5</td></tr>
+          <tr><td class="name">make</td><td class="num">любая</td><td>Команды запуска одной строкой. На Windows — из Git Bash</td><td class="num">0</td></tr>
+          <tr><td class="name">draw.io Desktop</td><td class="num">любая</td><td>Уже используется для диаграмм; для кода не нужен</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Ресурсы машины.</b> Базовый режим — 4–6 ядер, 6–8 ГБ RAM, 40–60 ГБ диска. С поднятой локальной моделью — 8–12 ядер, 16 ГБ минимум и 32 ГБ комфортно, 60–80 ГБ диска. GPU не требуется: генерацию на MVP выполняет внешний API, а эмбеддинги на объёме синтетической базы знаний считаются на процессоре за приемлемое время.
+    </div>
+
+    <h3>2.2. Python-зависимости по шагам</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Шаг</th><th>Пакеты</th><th>Роль</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0</td><td><code>faker</code> · <code>python-docx</code> · <code>pandas</code></td><td>Генерация синтетики: ФИО и адреса, документы базы знаний в .docx, табличные фикстуры</td></tr>
+          <tr><td class="num">0.5</td><td><code>huggingface-hub</code></td><td>Загрузка весов локальной модели, если она берётся не из реестра Ollama</td></tr>
+          <tr><td class="num">1</td><td><code>pydantic</code> ≥ 2 · <code>pydantic-settings</code></td><td>Схемы данных и настройки из окружения</td></tr>
+          <tr><td class="num">2</td><td><code>transitions</code></td><td>Конечный автомат. LangGraph <b>не берётся</b>: ADR на миграцию не написан, это единственный ненаписанный ADR проекта</td></tr>
+          <tr><td class="num">3</td><td><code>presidio-analyzer</code> · <code>presidio-anonymizer</code> · <code>spacy</code> + русская модель</td><td>PII Sanitizer: готовые распознаватели плюс свои для СНИЛС, ИНН и лицевого счёта</td></tr>
+          <tr><td class="num">4</td><td><code>litellm</code> · <code>redis</code> · <code>slowapi</code></td><td>Шлюз к моделям, счётчики квот, лимиты</td></tr>
+          <tr><td class="num">5</td><td><code>qdrant-client</code> · <code>sentence-transformers</code> · <code>FlagEmbedding</code></td><td>Векторный поиск, эмбеддинги BGE-M3, реранжинг</td></tr>
+          <tr><td class="num">6–7</td><td><code>httpx</code></td><td>Асинхронные вызовы между компонентами. Тяжёлый фреймворк агентов не нужен: агенты — тонкие обёртки над шлюзом и поиском</td></tr>
+          <tr><td class="num">8</td><td><code>fastapi</code> · <code>uvicorn</code> · <code>sse-starlette</code></td><td>API и настоящий SSE вместо имитации генератором</td></tr>
+          <tr><td class="num">9</td><td><code>xmlrpc.client</code> (стандартная библиотека)</td><td>Клиент XML-RPC API Биллинга — внешняя зависимость не нужна</td></tr>
+          <tr><td class="num">10</td><td><code>prometheus-client</code> · <code>clickhouse-connect</code> · <code>ragas</code> · <code>deepeval</code></td><td>Метрики, телеметрия, оценка качества RAG</td></tr>
+          <tr><td class="name">тесты</td><td><code>pytest</code> · <code>pytest-asyncio</code> · <code>pytest-cov</code> · <code>testcontainers</code> · <code>schemathesis</code> · <code>locust</code> · <code>ruff</code> · <code>mypy</code></td><td>Уровни L1–P плана тестирования</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Версии пакетов намеренно не зафиксированы числами.</b> Точные версии ставятся при первой установке и фиксируются в <code>uv.lock</code> — это факт, а не предположение. Проставлять их сейчас «по памяти» означало бы записать в проектный документ непроверенные числа.
+    </div>
+
+    <h3>2.3. Инфраструктура в контейнерах</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Сервис</th><th>Порт</th><th>Роль в проекте</th><th>Шаг</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Qdrant</td><td class="num">6333 / 6334</td><td>Векторная база: HNSW <code>m=16</code>, <code>ef=128</code>, payload-индексы по типу обращения, дате, подразделению, источнику</td><td class="num">5</td></tr>
+          <tr><td class="name">PostgreSQL</td><td class="num">5432</td><td>Session State Store (состояние FSM, слоты, аудит) и Sync State (курсоры, контрольные суммы); плюс синтетические слепки Биллинга и БД обращений</td><td class="num">0</td></tr>
+          <tr><td class="name">Redis</td><td class="num">6379</td><td>Счётчики квот и быстрый слой кэша профиля абонента</td><td class="num">4</td></tr>
+          <tr><td class="name">MinIO</td><td class="num">9000 / 9001</td><td>Data Lake для сырых документов и хранилище готовых документов Этапа 2</td><td class="num">9</td></tr>
+          <tr><td class="name">ClickHouse</td><td class="num">8123</td><td>Телеметрия: расход токенов, отчёты о ПДн и качестве</td><td class="num">10</td></tr>
+          <tr><td class="name">Prometheus</td><td class="num">9090</td><td>Сбор метрик по конвенции имён дашборда</td><td class="num">10</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Хранилище готовых документов помечено как предположение.</b> В проекте нигде не зафиксировано, где лежат сформированные документы и каков срок жизни ссылки на них. MinIO взят потому, что эта технология уже принята для резервного копирования и Data Lake — но это решение по аналогии внутри проекта, и оно ждёт подтверждения.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="models">
+    <h2>3. Модели и доступы</h2>
+    <p class="dek">Состав моделей зафиксирован ADR-007: пять ролей, из них одна внешняя. Ниже — что именно нужно получить, у кого и к какому шагу.</p>
+
+    <h3>3.1. Пять ролей моделей</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Роль</th><th>Модель</th><th>Где исполняется</th><th>Нужен доступ</th><th>Шаг</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Генерация ответа</td><td>GigaChat Pro</td><td>внешний управляемый API на территории РФ</td><td><b>Да</b> — учётные данные API</td><td class="num">4</td></tr>
+          <tr><td class="name">Генерация — резерв</td><td>YandexGPT</td><td>внешний управляемый API на территории РФ</td><td>Только на MVP. <b>На прототипе не нужен</b> — вторым backend'ом выступает локальная модель</td><td class="num">4</td></tr>
+          <tr><td class="name">Эмбеддинги</td><td>BGE-M3</td><td>локально, CPU</td><td>Нет — свободные веса</td><td class="num">5</td></tr>
+          <tr><td class="name">Реранжинг</td><td>BGE-reranker-v2-m3</td><td>локально, CPU</td><td>Нет — свободные веса</td><td class="num">5</td></tr>
+          <tr><td class="name">Судья качества</td><td>На прототипе — Qwen2.5-7B (локально); на MVP — YandexGPT</td><td>локально / внешний API</td><td>На прототипе не нужен</td><td class="num">10</td></tr>
+          <tr><td class="name">Локальная тестовая</td><td>Qwen2.5-7B-Instruct, INT4 / GGUF</td><td>локально, CPU</td><td>Нет — свободные веса</td><td class="num">0.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Зарубежные провайдеры исключены не по цене, а по допустимости.</b> Абонент — физическое лицо, и передача его персональных данных за периметр РФ без правового основания нарушает 152-ФЗ. Поэтому в конфигурации шлюза не должно появиться ни одного зарубежного провайдера общего назначения — даже как временного варианта «пока не дали доступ к GigaChat». Если доступ задерживается, работа идёт на локальной тестовой модели, а не на зарубежном API.
+    </div>
+
+    <h3>3.2. Что нужно получить и у кого</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Доступ</th><th>Что именно</th><th>Комментарий</th></tr></thead>
+        <tbody>
+          <tr><td class="name">GigaChat API</td><td>Идентификатор клиента и секрет, область доступа (персональная или корпоративная), лимит запросов</td><td>Выдаётся владельцем корпоративной учётной записи. Ключи кладутся в <code>.env</code>, в репозиторий не попадают</td></tr>
+          <tr><td class="name">Корневые сертификаты НУЦ Минцифры</td><td>Установка в доверенные корневые центры машины и в хранилище, которое использует Python</td><td><b>Практический блокер.</b> Без них обращение к GigaChat падает на проверке TLS-сертификата, и это выглядит как ошибка сети, а не как отсутствие сертификата. Отключать проверку сертификата вместо установки — недопустимо</td></tr>
+          <tr><td class="name">YandexGPT</td><td>Ключ сервисного аккаунта и идентификатор каталога</td><td><b>Только для MVP в проде</b>, где он и резерв генерации, и судья. Для прототипа <b>не запрашивается</b>: требование ADR-002 о двух провайдерах с автопереключением закрывается парой «GigaChat ↔ локальная модель», а судья на прототипе локальный по ADR-007</td></tr>
+          <tr><td class="name">Веса моделей с Hugging Face</td><td>Qwen2.5-7B-Instruct в квантованном формате, BGE-M3, BGE-reranker-v2-m3</td><td>Скачиваются один раз. Суммарный объём — порядка десяти гигабайт; точные размеры проверяются при загрузке, здесь не проставлены</td></tr>
+          <tr><td class="name">CSV-примеры структуры систем</td><td>Обезличенные образцы схем Биллинга, ЛК, БД обращений, реестра договоров, базы знаний</td><td><b>Ещё не получены.</b> Блокер точности шага 0 — см. раздел 0. Готовый перечень для отправки владельцам систем — <code>Data_Request.md</code>: десять пунктов с составом полей, объёмом образцов и приоритетом запроса</td></tr>
+          <tr><td class="name">Доступ к самим системам</td><td>—</td><td>Не запрашивается: системы внутри закрытой сети, на этом проекте доступа не будет ни на разработке, ни на демонстрации</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Почему судья и отвечающая модель — разные.</b> Модель, оценивающая собственный ответ, систематически завышает оценку. Правило «судья из другого пула» прослеживается во всех трёх состояниях: на MVP отвечает GigaChat Pro, судит YandexGPT; при переключении генерации на YandexGPT оценка на эту ночь <b>пропускается</b>, а факт пропуска фиксируется — потерять один прогон дешевле, чем получить завышенную оценку, неотличимую от честной; при полном переходе на собственные модели судьёй становится второй локальный экземпляр другой модели.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="data">
+    <h2>4. Стартовые данные</h2>
+    <p class="dek">Всё генерируется скриптом шага 0. Структура повторяет реальные системы, содержимое — нет: ни одной настоящей записи абонента в проекте не появляется.</p>
+
+    <h3>4.1. Файлы фикстур</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Файл</th><th>Источник по каталогу</th><th>Ключевые поля</th><th>Объём</th><th>Нужен на шаге</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><code>fixtures/taxonomy.csv</code></td><td>справочник проекта</td><td>код, отображаемое имя, подразделение, признак доступности для Этапа 2</td><td class="num">10 строк</td><td class="num">1</td></tr>
+          <tr><td class="name"><code>fixtures/billing_accounts.csv</code></td><td>1 — БД Биллинга</td><td>лицевой счёт, ФИО, адрес, баланс, статус договора</td><td class="num">1 000</td><td class="num">0, 9</td></tr>
+          <tr><td class="name"><code>fixtures/billing_charges.csv</code></td><td>1 — БД Биллинга</td><td>лицевой счёт, период, начислено, оплачено, задолженность</td><td class="num">12 000</td><td class="num">9</td></tr>
+          <tr><td class="name"><code>fixtures/billing_meters.csv</code></td><td>9 — данные о поверке</td><td>лицевой счёт, номер счётчика, дата поверки, срок следующей</td><td class="num">1 000</td><td class="num">9</td></tr>
+          <tr><td class="name"><code>fixtures/lk_users.csv</code></td><td>4 — БД личного кабинета</td><td>идентификатор абонента, лицевой счёт, телефон, email, канал</td><td class="num">1 000</td><td class="num">0</td></tr>
+          <tr><td class="name"><code>fixtures/inquiries.csv</code></td><td>3 — БД обращений</td><td>номер обращения, тип, текст, статус, подразделение, дата</td><td class="num">3 000</td><td class="num">0, 9</td></tr>
+          <tr><td class="name"><code>fixtures/dispatch_incidents.csv</code></td><td>7 — Диспетчерская система</td><td>идентификатор аварии, зона, статус, ожидаемое время устранения</td><td class="num">200</td><td class="num">9</td></tr>
+          <tr><td class="name"><code>fixtures/contracts_registry.csv</code></td><td>8 — реестр договоров</td><td>тип обращения, имя файла, версия, дата вступления в силу</td><td class="num">100</td><td class="num">5</td></tr>
+          <tr><td class="name"><code>fixtures/callcenter_tickets.csv</code></td><td>10 — CRM колл-центра</td><td>тема, расшифровка, тип обращения</td><td class="num">не генерируется</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Источник 10 намеренно не генерируется даже синтетически.</b> Расшифровки звонков — производные от голоса, а голос квалифицируется как биометрические персональные данные и требует письменного согласия субъекта. Согласия в проекте нет. Синтетический файл создал бы в коде путь обработки, который потом легко наполнить реальными данными без повторной проверки основания. Поэтому источник появится в проекте только вместе с зафиксированным согласием.
+    </div>
+
+    <h3>4.2. База знаний и наборы для проверок</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Файл</th><th>Что содержит</th><th>Объём</th><th>Нужен на шаге</th></tr></thead>
+        <tbody>
+          <tr><td class="name"><code>kb/regulations/*.docx</code></td><td>Регламенты и инструкции по биллингу — источники 2 и 5. Структура с заголовками, чтобы чанкинг уважал границы разделов</td><td class="num">≈ 60 файлов</td><td class="num">5</td></tr>
+          <tr><td class="name"><code>kb/contracts/*.docx</code></td><td>Типовые формы, устав, оферта — источник 12</td><td class="num">≈ 20 файлов</td><td class="num">5, 9</td></tr>
+          <tr><td class="name"><code>kb/faq.md</code></td><td>Публичный FAQ и материалы сайта — источник 11</td><td class="num">≈ 150 вопросов</td><td class="num">5</td></tr>
+          <tr><td class="name"><code>golden_set/golden_set.jsonl</code></td><td>Эталонные вопросы с проверенными ответами и ожидаемыми источниками; все 10 типов плюс пограничные случаи</td><td class="num">50–100</td><td class="num">10</td></tr>
+          <tr><td class="name"><code>golden_set/pii_corpus.jsonl</code></td><td>Запросы с шестью типами сущностей минимум в трёх форматах написания каждый — на этом корпусе измеряется полнота фильтрации</td><td class="num">≥ 200</td><td class="num">3</td></tr>
+          <tr><td class="name"><code>golden_set/attack_corpus.jsonl</code></td><td>Попытки раскрыть системный промпт, обойти правила, спровоцировать токсичность, получить чужие данные</td><td class="num">≈ 40</td><td class="num">3</td></tr>
+          <tr><td class="name"><code>fixtures/stubs/*.json</code></td><td>Записанные ответы дублей внешних систем: Биллинг, микросервис обращений, Диспетчерская</td><td class="num">3 набора</td><td class="num">9</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Требования к генератору, которые нельзя пропустить.</b> Первое: покрытие всех десяти типов таксономии в достаточном объёме — иначе стратифицированная подвыборка для проверки на каждом изменении не наберётся, и просадка по отдельному типу останется незамеченной. Второе: выход генератора <b>обязан</b> пройти через тот же фильтр персональных данных, что и рабочий трафик — не потому, что в синтетике есть настоящие данные, а потому что генератор может случайно воспроизвести валидный СНИЛС или существующий номер телефона. Третье: фиксированное зерно случайности, иначе данные меняются между прогонами и метрики качества становятся несравнимыми.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="steps-a">
+    <h2>5. Шаги разработки — основание системы</h2>
+    <p class="dek">Каждый шаг закрывается своей проверкой. Переход к следующему без закрытия предыдущего запрещён: именно так прототип однажды пришлось переписывать целиком.</p>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 0</span><span class="stitle">Синтетические данные</span><span class="stime">2–5 ч</span></div>
+      <div class="sfiles">scripts/generate_synthetic.py · fixtures/*.csv · kb/**</div>
+      <div class="sgoal">Наполнить локальные хранилища данными, повторяющими структуру реальных систем. Без этого шага ни поиск, ни адаптеры не на чем проверять — реальные системы внутри закрытой сети.</div>
+
+      <h4>Новое ПО</h4>
+      <ul>
+        <li>Python 3.12, uv, Git, Docker Desktop — базовая установка машины</li>
+        <li>Пакеты: <code>faker</code>, <code>python-docx</code>, <code>pandas</code></li>
+        <li>Контейнеры: PostgreSQL (слепки Биллинга и БД обращений)</li>
+      </ul>
+
+      <h4>Модели и доступы</h4>
+      <ul><li>Не требуются</li></ul>
+
+      <h4>Данные на выходе</h4>
+      <ul>
+        <li>Восемь CSV-фикстур раздела 4.1 и база знаний в <code>kb/</code></li>
+        <li>Схемы таблиц PostgreSQL, повторяющие структуру источников 1, 3, 4, 9</li>
+      </ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Все десять типов таксономии присутствуют в обращениях и в базе знаний, ни один не пуст</li>
+        <li>Весь сгенерированный корпус прогоняется через фильтр персональных данных: ноль совпадений с валидными реальными паттернами</li>
+        <li>Повторный запуск с тем же зерном даёт побайтово те же файлы</li>
+        <li>Связность: каждый лицевой счёт в начислениях существует в списке счетов; каждое обращение ссылается на существующего абонента</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> <code>make seed</code> поднимает хранилища и наполняет их, а повторный запуск воспроизводит идентичный результат.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 0.5</span><span class="stitle">Локальная тестовая модель</span><span class="stime">2–3 ч</span></div>
+      <div class="sfiles">app/gateway/local_test_backend.py · docs/model-choice.md</div>
+      <div class="sgoal">Подключить локальную модель как ещё один backend шлюза, чтобы офлайн-проверки промптов и Security Layer не тратили платный внешний API. Переключение внешняя ↔ локальная — одной строкой конфигурации, без правки кода.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li>Ollama как рантайм; <code>huggingface-hub</code>, если веса берутся напрямую</li></ul>
+
+      <h4>Модели и доступы</h4>
+      <ul>
+        <li>Qwen2.5-7B-Instruct в квантованном формате — свободные веса, доступ не требуется</li>
+        <li>Внешние API на этом шаге не нужны</li>
+      </ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Обёртка отвечает по тому же контракту, что и внешняя модель: те же поля запроса и ответа, тот же формат потока</li>
+        <li>Переключение провайдера выполняется правкой конфигурации, код шлюза не меняется</li>
+        <li>В <code>docs/model-choice.md</code> записано обоснование выбора: размер, лицензия, поддержка русского языка, требования к памяти — с проверенными числами, а не по аналогии</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> один и тот же тест проходит и на внешней модели, и на локальной, без изменений в коде.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 1</span><span class="stitle">Фундамент — конфигурация, таксономия, схемы</span><span class="stime">1–2 ч</span></div>
+      <div class="sfiles">app/config.py · app/taxonomy.py · app/models.py</div>
+      <div class="sgoal">Единый справочник типов обращений и схемы данных. От них зависят все остальные модули, поэтому они первые — и поэтому здесь же закрывается главный дефект прототипа.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>pydantic</code> ≥ 2, <code>pydantic-settings</code></li></ul>
+
+      <h4>Данные</h4>
+      <ul><li><code>fixtures/taxonomy.csv</code> — десять кодов и отображаемых имён</li></ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Регрессия дефекта таксономии: значение из справочника, значение в метаданных вектора и ключ в словаре ключевых слов совпадают побайтово для всех десяти кодов</li>
+        <li>Свойство-тест: любое значение после нормализации равно самому себе — хвостовых пробелов и разного регистра не остаётся</li>
+        <li>Отображаемое имя существует ровно для десяти кодов и ни для чего больше</li>
+        <li>Схемы запроса и ответа валидируются по контракту, включая границу длины вопроса</li>
+        <li>Линтеры проходят на всём пакете — этим закрываются синтаксические артефакты прототипа</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> тест несоответствия таксономии падает на старом справочнике прототипа и проходит на новом.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 2</span><span class="stitle">Конечный автомат обращения</span><span class="stime">1–2 ч</span></div>
+      <div class="sfiles">app/fsm.py</div>
+      <div class="sgoal">Допустимые переходы между состояниями обращения. На автомате строится вся оркестрация, и он же — место, где живёт гарантия «без подтверждения записи не будет».</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>transitions</code></li></ul>
+
+      <div class="note warn" style="margin-top:14px">
+        <b>LangGraph на этом шаге не берётся.</b> Миграция автомата на него — единственный ненаписанный ADR проекта; на диаграмме оркестратора библиотека помечена как кандидат, решения нет. Взять LangGraph сейчас означало бы принять архитектурное решение кодом в обход собственного правила «сначала решение, потом код».
+      </div>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Каждый переход, показанный на диаграмме последовательностей, существует в автомате</li>
+        <li>Недопустимые переходы отклоняются ошибкой, а не выполняются молча</li>
+        <li>Отдельным тестом: из состояния ожидания подтверждения нельзя попасть в состояние отправки иначе как явным подтверждением</li>
+        <li>Ключи словаря переходов сверяются с эталонным списком побайтово — регрессия дефекта с пробелами в ключах</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> набор переходов автомата и набор переходов на диаграмме совпадают полностью, в обе стороны.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 3</span><span class="stitle">Security Layer — фильтр ПДн и Guardrails</span><span class="stime">2–4 ч</span></div>
+      <div class="sfiles">app/gateway/pii_filter.py · app/gateway/guardrails.py</div>
+      <div class="sgoal">Реализация того, что уже нарисовано на диаграмме шлюза: обезличивание до отправки во внешнюю модель и проверка ответа перед выдачей абоненту. Новое проектирование здесь не ведётся.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>presidio-analyzer</code>, <code>presidio-anonymizer</code>, <code>spacy</code> с русской моделью</li></ul>
+
+      <h4>Модели и доступы</h4>
+      <ul><li>Локальная модель шага 0.5 — для проверок без обращения к платному API</li></ul>
+
+      <h4>Данные</h4>
+      <ul>
+        <li><code>golden_set/pii_corpus.jsonl</code> — не менее 200 запросов, шесть типов сущностей в трёх и более форматах написания каждый</li>
+        <li><code>golden_set/attack_corpus.jsonl</code> — около сорока сценариев атак на промпт</li>
+      </ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Ноль пропусков на корпусе персональных данных — это и есть измеримая замена абсолютного «сто процентов» из критериев готовности</li>
+        <li>Регрессия телефонного шаблона: восемь форматов записи распознаются, а сумма, дата и номер счёта — не распознаются как телефон</li>
+        <li>Регрессия шаблона лицевого счёта: девятизначное число само по себе <b>не</b> помечается, а рядом со словами «лицевой счёт», «л/с», «ЛС» — помечается</li>
+        <li>Отчёт о найденных данных содержит типы сущностей и не содержит их значений</li>
+        <li>Четыре сценария безопасности из плана тестирования RAG проходят: инъекция, утечка в ответе, данные во входе, провокация токсичности</li>
+        <li>Синхронная проверка ответа укладывается в пятьдесят миллисекунд на типовом ответе</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> корпус персональных данных проходит без единого пропуска, и это зафиксировано в отчёте прогона.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 4</span><span class="stitle">LLM Gateway</span><span class="stime">2–3 ч</span></div>
+      <div class="sfiles">app/gateway/llm_gateway.py · app/gateway/quota.py</div>
+      <div class="sgoal">Единая точка обращения к моделям: квоты, обезличивание, вызов провайдера, проверка ответа. Порядок проверок зафиксирован версией 4.5 и обязателен.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>litellm</code>, <code>redis</code>, <code>slowapi</code>; контейнер Redis</li></ul>
+
+      <h4>Модели и доступы</h4>
+      <ul>
+        <li><b>GigaChat Pro</b> — идентификатор клиента, секрет, область доступа</li>
+        <li><b>Корневые сертификаты НУЦ Минцифры</b> — без них обращение падает на проверке TLS</li>
+        <li><b>Локальная модель шага 0.5</b> — второй backend в конфигурации переключения. Этого достаточно для требования ADR-002 о двух провайдерах с автопереключением; YandexGPT добавляется только на MVP</li>
+      </ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Порядок соблюдён: квота проверяется <b>до</b> обезличивания; при превышении обращения к провайдеру не происходит вовсе</li>
+        <li>Ответ 429 всегда сопровождается заголовком со временем повтора — отсутствие заголовка считается провалом, а не замечанием</li>
+        <li>Три уровня лимитов работают независимо: на абонента, на сессию, на сервис целиком</li>
+        <li>Переключение на резервного провайдера происходит по конфигурации, без правки кода</li>
+        <li>Персональные данные отсутствуют в теле запроса, уходящего к провайдеру — проверка перехватом исходящего трафика</li>
+        <li>Счётчик токенов учитывает и входные, и выходные токены</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> один и тот же набор тестов проходит на внешнем провайдере и на локальной модели, а перехват исходящего трафика не находит персональных данных.</div>
+
+      <div class="note crit" style="margin-top:14px">
+        <b>Поведение при недоступности Redis не определено ни одним документом проекта.</b> В нём живут и счётчики квот, и состояние сессий. Нужно решить до кодирования: сервис отклоняет запросы или продолжает работать без учёта лимитов. Первое безопаснее для бюджета, второе — для доступности. Решение зафиксировать, а не оставить на усмотрение реализации.
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="steps-b">
+    <h2>6. Шаги разработки — поиск, агенты, интерфейс</h2>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 5</span><span class="stitle">Retrieval и индексация</span><span class="stime">3–5 ч</span></div>
+      <div class="sfiles">app/vector/vector_store.py · app/vector/embeddings.py · app/etl/{ingest,splitter,indexer}.py</div>
+      <div class="sgoal">Поиск по базе знаний и конвейер её индексации. Нужен раньше агентов: и классификатор, и консультант читают из него.</div>
+
+      <h4>Новое ПО</h4>
+      <ul>
+        <li><code>qdrant-client</code>, <code>sentence-transformers</code>, <code>FlagEmbedding</code></li>
+        <li>Контейнеры: Qdrant, MinIO (сырой слой документов)</li>
+      </ul>
+
+      <h4>Модели и доступы</h4>
+      <ul>
+        <li>BGE-M3 — эмбеддинги, локально на процессоре, доступ не нужен</li>
+        <li>BGE-reranker-v2-m3 — реранжинг, локально</li>
+        <li>Внешний резерв эмбеддингов <b>на онлайн-пути не подключается</b>: он обошёл бы барьер персональных данных, который защищает только путь генерации. Разрешён исключительно при офлайн-индексации регламентов</li>
+      </ul>
+
+      <h4>Данные</h4>
+      <ul><li>База знаний из шага 0: регламенты, типовые формы, FAQ; реестр договоров как источник метаданных</li></ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Регрессия дефекта фильтрации: поиск с фильтром по типу обращения возвращает чанки только этого типа — проверяется на живом Qdrant, не на моке</li>
+        <li>Отдельный тест-ловушка: фильтр реально доходит до клиента базы, а не теряется в обёртке</li>
+        <li>Параметры индекса установлены: HNSW с заданными значениями, payload-индексы по четырём полям</li>
+        <li>В поиск уходит двадцать кандидатов, из реранжинга выходит три</li>
+        <li>При релевантности ниже порога возвращается пустой результат, а не слабо подходящий</li>
+        <li>Каждый чанк в индексе имеет непустые метаданные и версию модели эмбеддингов в полезной нагрузке</li>
+        <li>Повторный запуск индексации без изменений в источнике не выполняет ни одной операции эмбеддинга</li>
+        <li>Поиск отвечает непрерывно во время полной переиндексации; переключение на новый индекс происходит только после полного успеха</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> запрос по каждому из десяти типов обращений находит релевантные фрагменты, а прогон повторной индексации не порождает лишней работы.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 6</span><span class="stitle">Агенты</span><span class="stime">3–5 ч</span></div>
+      <div class="sfiles">app/agents/{triage,advisor,form,draft_validator}.py</div>
+      <div class="sgoal">Тонкие обёртки над шлюзом и поиском. Тяжёлый фреймворк агентов не нужен — вся логика состояний живёт в автомате шага 2.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>httpx</code></li></ul>
+
+      <h4>Модели и доступы</h4>
+      <ul><li>Через шлюз шага 4 — отдельных доступов не требуется</li></ul>
+
+      <div class="note" style="margin-top:14px">
+        <b>Открытый вопрос этого шага уже закрыт версией 4.5.</b> Проверка ответа модели и проверка готовности черновика — <b>разные</b> вещи. Guardrails внутри шлюза проверяет ответ модели, Draft Validator в оркестраторе проверяет полноту обязательных слотов до показа абоненту. Дублирования нет, кодируются оба, но с разными задачами.
+      </div>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Классификатор в обоих режимах — с моделью и по ключевым словам — возвращает значение из справочника; регрессия дефекта с посторонним значением в запасном пути</li>
+        <li>Консультант не вызывает генерацию при пустом контексте</li>
+        <li>Форма запрашивает ровно недостающие обязательные слоты, не больше и не меньше</li>
+        <li>Валидатор черновика не пропускает дальше неполный черновик</li>
+        <li>По каждому агенту — один сценарий из эталонного набора целиком, без подмен</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> ни один путь возврата типа обращения не выдаёт значения вне справочника.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 7</span><span class="stitle">Оркестрация</span><span class="stime">2–3 ч</span></div>
+      <div class="sfiles">app/supervisor.py</div>
+      <div class="sgoal">Связать автомат и агентов в один сценарий диалога.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li>Не требуется</li></ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Три сквозных сценария доходят до терминального состояния, а не зависают: обычный путь, пустая база знаний, низкая уверенность классификации</li>
+        <li>Состояние сессии и журнал действий переживают перезапуск сервиса</li>
+        <li>Идентификатор сессии работает уже в чистом режиме вопрос-ответ, без участия оркестратора Этапа 2</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> сценарии из диаграммы последовательностей Этапа 1 проходят от вопроса до ответа.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 8</span><span class="stitle">API и потоковая отдача</span><span class="stime">1–3 ч</span></div>
+      <div class="sfiles">app/api.py · app/main.py</div>
+      <div class="sgoal">Публикация наружу по контракту: два endpoint'а, настоящий поток вместо имитации, ошибки в стандартном формате.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li><code>fastapi</code>, <code>uvicorn</code>, <code>sse-starlette</code>; для проверок — <code>schemathesis</code>, <code>spectral</code>, <code>swagger-cli</code></li></ul>
+
+      <div class="note crit" style="margin-top:14px">
+        <b>Шаг блокирован недоведённой спецификацией.</b> Семь остаточных проблем контракта — в том числе локальный адрес, помеченный как боевой, и отсутствие схемы у события ошибки в потоке — должны быть закрыты <b>до</b> этого шага. Иначе контрактные тесты закрепят дефекты спецификации как правильное поведение.
+      </div>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Отвечают ровно два пути; любой третий даёт 404; удалённый ранее путь со списком моделей отсутствует</li>
+        <li>Пять кодов ошибок воспроизводятся отдельными сценариями и возвращают тело стандартного формата с идентификатором трассировки</li>
+        <li>События потока строго из заданного набора; метаданные приходят один раз перед завершением; поток всегда закрывается событием, а не обрывом соединения</li>
+        <li>В метаданных присутствуют источники, уверенность, предлагаемые действия и дисклеймер — все четыре, даже пустые</li>
+        <li>Проверка доступности отвечает без авторизации и не раскрывает ничего сверх статуса</li>
+        <li>Первый токен доходит до клиента раньше, чем модель закончила генерацию — иначе поток собран целиком и правило потоковой отдачи нарушено</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> генератор запросов по спецификации не находит расхождений между контрактом и реализацией.</div>
+    </div>
+
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 8.5</span><span class="stitle">Демо-стенд вместо личного кабинета</span><span class="stime">3–5 ч</span></div>
+      <div class="sfiles">web/index.html · web/app.js · web/style.css — отдаются статикой самим сервисом</div>
+      <div class="sgoal">Доступа к настоящему личному кабинету на прототипе не будет, а показывать систему как-то нужно. Одна страница, имитирующая кабинет: выбор абонента, его лицевой счёт и баланс из синтетики, под ними — виджет диалога.</div>
+
+      <h4>Новое ПО</h4>
+      <ul>
+        <li>Не требуется. Страница отдаётся статикой из FastAPI, поток читается штатным <code>EventSource</code> браузера</li>
+      </ul>
+
+      <h4>Модели и доступы</h4>
+      <ul><li>Через шлюз шага 4 — отдельных не требуется</li></ul>
+
+      <h4>Данные</h4>
+      <ul><li>Список абонентов и их лицевых счетов из фикстур шага 0 — для переключателя «под кем работаем»</li></ul>
+
+      <div class="note warn" style="margin-top:14px">
+        <b>Сознательное отклонение прототипа от целевой технологии.</b> На L2 виджет заявлен как React / TypeScript, встраиваемый в существующий кабинет, и это решение <b>не меняется</b>. На прототипе берётся простая страница без сборочного конвейера: React здесь не проверил бы ничего архитектурного, зато потребовал бы установки Node и второго процесса на демонстрации. Отклонение фиксируется в <code>docs/</code>, чтобы не читалось как смена стека.
+      </div>
+
+      <h4>Что на странице</h4>
+      <ul>
+        <li><b>Переключатель абонента</b> — имитация уже состоявшегося входа. Не украшение: это единственный способ показать привязку абонента к сессии и проверить обращение к чужим данным — войти одним, попробовать подтвердить черновик другого</li>
+        <li><b>Карточка абонента</b> — лицевой счёт, баланс, задолженность из синтетического слепка Биллинга</li>
+        <li><b>Лента диалога</b> с посимвольным появлением ответа, блоком источников и кнопками предлагаемых действий</li>
+        <li><b>Диалог подтверждения</b> и <b>панель документа</b> — два разных состояния одного документа, как разведено на диаграмме виджета</li>
+        <li><b>Служебная панель</b> — сырые события потока, отчёт о найденных персональных данных, идентификатор трассировки, счётчик токенов. Делает наблюдаемым весь демонстрационный сценарий</li>
+      </ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Ответ появляется по мере генерации, а не целиком по завершении</li>
+        <li>Отказ по лимиту приводит к автоматическому повтору по истечении указанного времени</li>
+        <li>Смена абонента меняет содержимое карточки и обрывает предыдущую сессию — состояние не протекает между абонентами</li>
+        <li>Попытка подтвердить черновик, созданный другим абонентом, отклоняется — сценарии S1 и S2 воспроизводимы вручную на демонстрации</li>
+        <li>Готовый документ появляется в ленте вложением или ссылкой, отдельно от черновика в диалоге подтверждения</li>
+        <li>В служебной панели видны отчёт о персональных данных без самих значений и сквозной идентификатор трассировки</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> все девять пунктов демонстрационного сценария раздела 8 проходятся на этой странице без обращения к консоли.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 9</span><span class="stitle">Адаптеры Этапа 2 — заглушки</span><span class="stime">2–3 ч</span></div>
+      <div class="sfiles">app/adapters/{billing_adapter,inquiry_service,document_generator}.py</div>
+      <div class="sgoal">Только заглушки: Этап 2 не внедряется до метрик Этапа 1. Проверяется логика гейтов, а не реальный путь записи.</div>
+
+      <h4>Новое ПО</h4>
+      <ul><li>Клиент XML-RPC входит в стандартную библиотеку — внешняя зависимость не нужна; контейнер MinIO для готовых документов</li></ul>
+
+      <h4>Данные</h4>
+      <ul><li>Слепки Биллинга, обращений и Диспетчерской из шага 0; записанные ответы дублей внешних систем</li></ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>Запись не выполняется вне состояния ожидания подтверждения — попытка вызвать адаптер напрямую отклоняется на уровне оркестратора</li>
+        <li>Повтор с тем же ключом идемпотентности не создаёт вторую операцию</li>
+        <li>Привязка абонента к аутентифицированной сессии проверяется на <b>каждом</b> вызове записи — это закрывает две угрозы, помеченные в разборе безопасности как незакрытые</li>
+        <li>Отказ абонента фиксируется в журнале с явной пометкой, что запись не производилась</li>
+        <li>Архитектурный тест: ни один модуль не обращается к базе данных чужой системы напрямую — только через её интерфейс</li>
+        <li>Путь документа прослеживается целиком: от формирования до появления в ленте диалога</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> все проверки гейтов проходят на синтетическом слепке, а архитектурный тест не находит прямых обращений к чужим базам.</div>
+
+      <div class="note crit" style="margin-top:14px">
+        <b>Один сценарий этого шага не имеет ожидаемого результата.</b> Что происходит, если обращение зарегистрировано, а аварийная заявка не ушла — компенсация при частичном отказе двух путей записи не спроектирована. Пока решения нет, сценарий с аварийным обращением не может быть покрыт тестом. Решить до начала шага.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 10</span><span class="stitle">Наблюдаемость и эталонный набор</span><span class="stime">2–4 ч</span></div>
+      <div class="sfiles">app/metrics/prometheus.py · scripts/build_golden_set.py · golden_set/**</div>
+      <div class="sgoal">Замкнуть цикл на уже спроектированные дашборд и план тестирования качества: метрики начинают эмитироваться, эталонный набор появляется физически.</div>
+
+      <h4>Новое ПО</h4>
+      <ul>
+        <li><code>prometheus-client</code>, <code>clickhouse-connect</code>, <code>ragas</code>, <code>deepeval</code></li>
+        <li>Контейнеры: Prometheus, ClickHouse</li>
+      </ul>
+
+      <h4>Модели и доступы</h4>
+      <ul>
+        <li>Судья качества: YandexGPT — отдельная от отвечающей модель</li>
+        <li>На прототипе допустим локальный судья шага 0.5, чтобы не тратить внешний API</li>
+      </ul>
+
+      <h4>Данные</h4>
+      <ul><li>Эталонный набор на 50–100 вопросов, собранный из синтетики: все десять типов плюс пограничные случаи</li></ul>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>При сборе метрик присутствуют все имена, на которые ссылаются виджеты дашборда — отсутствие любого означает пустой виджет в бою</li>
+        <li>Счётчик блокировок имеет разбивку по причинам, и значение «утечка персональных данных» реально появляется в соответствующем сценарии</li>
+        <li>Утилизация вычислителей размечена по типу нагрузки — конвейер индексации и онлайн-обслуживание различимы на одном графике</li>
+        <li>Все девять правил оповещения прогоняются на синтетических рядах: срабатывают при нарушении и молчат при норме</li>
+        <li>Идентификатор трассировки сквозной: один идентификатор связывает запись виджета, оркестрации, шлюза и телеметрии</li>
+        <li>Ночной прогон по эталонному набору проходит и даёт базовую линию, от которой дальше считается регрессия</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> базовая линия качества зафиксирована, и с этого момента пороги качества становятся обязательными, а не стартовыми.</div>
+    </div>
+
+    <div class="step">
+      <div class="shead"><span class="snum">ШАГ 11</span><span class="stitle">Финал — README и структура репозитория</span><span class="stime">2–3 ч</span></div>
+      <div class="sfiles">README.md · Makefile · .env.example</div>
+      <div class="sgoal">Собрать всё так, чтобы проект поднимался у человека, который его не писал. Пишется последним: раньше кода README был бы выдумкой.</div>
+
+      <h4>Проверка</h4>
+      <ul>
+        <li>На чистой машине: клонирование, установка зависимостей, заполнение переменных окружения, подъём контейнеров, наполнение данными, запуск — по шагам README, без устных пояснений</li>
+        <li>Smoke-проверка после запуска: доступность отвечает, один сквозной запрос проходит, метрики появляются</li>
+        <li>В репозитории нет ни одного секрета: только шаблон переменных окружения</li>
+      </ul>
+      <div class="sdone"><b>Готово, когда:</b> клонирование и одна команда из README поднимают сервис.</div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="launch">
+    <h2>7. План запуска</h2>
+    <p class="dek">Порядок команд от чистой машины до отвечающего сервиса. Каждая строка — цель в Makefile, чтобы запуск не зависел от того, что человек помнит наизусть.</p>
+
+    <h3>7.1. Первый запуск</h3>
+    <div class="formula">git clone &lt;репозиторий&gt; &amp;&amp; cd vodokanal-assistant
+
+uv sync                      установка зависимостей из блокировки версий
+cp .env.example .env         затем заполнить учётные данные провайдера
+make infra                   поднять Qdrant, Postgres, Redis, MinIO
+make seed                    сгенерировать синтетику и наполнить хранилища
+make models                  скачать веса эмбеддингов, реранкера, локальной модели
+make index                   проиндексировать синтетическую базу знаний
+make run                     запустить сервис
+make smoke                   проверить, что всё поднялось</div>
+
+    <h3>7.2. Порядок и зависимости</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Шаг</th><th>Зависит от</th><th>Признак успеха</th><th>Типичная ошибка</th></tr></thead>
+        <tbody>
+          <tr><td class="name">infra</td><td>Docker запущен</td><td>Все контейнеры в состоянии healthy</td><td>Занятые порты — сменить в конфигурации, а не выключать проверки</td></tr>
+          <tr><td class="name">seed</td><td>infra</td><td>Таблицы наполнены, файлы базы знаний созданы</td><td>Запуск до готовности Postgres — ждать состояния healthy, а не фиксированную паузу</td></tr>
+          <tr><td class="name">models</td><td>—</td><td>Веса на диске, локальная модель отвечает на пробный запрос</td><td>Нехватка места: держать не менее ста гигабайт свободных</td></tr>
+          <tr><td class="name">index</td><td>seed, models, infra</td><td>Число векторов в базе соответствует числу чанков</td><td>Индексация до загрузки весов — падает на первом же эмбеддинге</td></tr>
+          <tr><td class="name">run</td><td>всё выше</td><td>Проверка доступности отвечает</td><td>Незаполненный файл окружения — сервис стартует, но падает на первом обращении к модели</td></tr>
+          <tr><td class="name">smoke</td><td>run</td><td>Сквозной запрос вернул ответ с источниками</td><td>Отсутствие корневых сертификатов — выглядит как сетевая ошибка</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>7.3. Режимы работы</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Режим</th><th>Провайдер генерации</th><th>Когда используется</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Офлайн</td><td>локальная модель</td><td>Разработка, отладка промптов, нагрузочные прогоны, проверки Security Layer — без расхода платных токенов</td></tr>
+          <tr><td class="name">Боевой</td><td>внешний управляемый API</td><td>Демонстрация, калибровка задержек, ночная оценка качества</td></tr>
+          <tr><td class="name">Переключение</td><td colspan="2">Правка одной строки конфигурации шлюза. Код не меняется — это и есть проверка того, что абстракция шлюза работает так, как обещано в решении о хостинге</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Что в запуске проверяет архитектурное решение, а не работоспособность.</b> Возможность переключить провайдера строкой конфигурации — не удобство разработчика, а подтверждение центрального тезиса решения о хостинге модели: переход на собственную модель должен быть правкой конфигурации, а не переработкой системы. Если для переключения потребуется трогать код, решение не выполнено, и это нужно фиксировать как расхождение, а не обходить.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="demo">
+    <h2>8. Демонстрационный сценарий</h2>
+    <p class="dek">Что показывается на защите. Порядок выстроен так, чтобы каждый следующий пункт опирался на уже показанное, а жёсткие правила проекта были видны в работе, а не в пересказе.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Что показывается</th><th>Какое правило подтверждает</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Вопрос по базе знаний, ответ печатается на глазах, внизу — источники и предлагаемые действия</td><td>Потоковая отдача обязательна; ответ всегда со ссылками на источники</td></tr>
+          <tr><td class="num">2</td><td>Вопрос с лицевым счётом и телефоном в тексте; рядом — журнал шлюза, где виден отчёт о найденных данных без самих значений</td><td>Обезличивание до отправки во внешнюю модель</td></tr>
+          <tr><td class="num">3</td><td>Вопрос не по теме: система не выдумывает ответ, а уходит в запасной путь и предлагает выбрать тип обращения</td><td>Порог релевантности и запасной путь без модели</td></tr>
+          <tr><td class="num">4</td><td>Серия частых запросов: приходит отказ по лимиту с указанием времени повтора, виджет повторяет сам</td><td>Квоты и корректная обработка превышения</td></tr>
+          <tr><td class="num">5</td><td>Сценарий Этапа 2 на заглушках: сбор слотов, черновик, показ абоненту, подтверждение, запись, номер обращения</td><td>Подтверждение человеком перед любой записью</td></tr>
+          <tr><td class="num">6</td><td>Повтор подтверждения: вторая операция не создаётся</td><td>Идемпотентность</td></tr>
+          <tr><td class="num">7</td><td>Отказ абонента: записи нет, в журнале — отметка об отказе</td><td>Полнота журнала действий</td></tr>
+          <tr><td class="num">8</td><td>Переключение провайдера строкой конфигурации, тот же вопрос отвечает другая модель</td><td>Шлюз как единая точка абстракции</td></tr>
+          <tr><td class="num">9</td><td>Дашборд: задержка до первого токена, расход токенов, счётчик блокировок</td><td>Наблюдаемость не на бумаге</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Что на демонстрации показать не получится и почему это нормально.</b> Обращений к настоящему Биллингу, личному кабинету и микросервису обращений не будет — все пять систем внутри закрытой сети, и это зафиксированное ограничение проекта, а не недоделка. На их месте синтетические слепки той же структуры. Об этом лучше сказать первым слайдом, чем отвечать на вопрос из зала.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="schedule">
+    <h2>9. График и критический путь</h2>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Шаг</th><th>Оценка</th><th>Можно ли параллелить</th></tr></thead>
+        <tbody>
+          <tr><td class="name">0 · Синтетические данные</td><td class="num">2–5 ч</td><td>Нет — от него зависит почти всё</td></tr>
+          <tr><td class="name">0.5 · Локальная модель</td><td class="num">2–3 ч</td><td>Да — независим от шага 0</td></tr>
+          <tr><td class="name">1 · Фундамент</td><td class="num">1–2 ч</td><td>Нет</td></tr>
+          <tr><td class="name">2 · Конечный автомат</td><td class="num">1–2 ч</td><td>Да — параллельно шагу 3</td></tr>
+          <tr><td class="name">3 · Security Layer</td><td class="num">2–4 ч</td><td>Да — параллельно шагу 2</td></tr>
+          <tr><td class="name">4 · LLM Gateway</td><td class="num">2–3 ч</td><td>Нет — нужен шаг 3</td></tr>
+          <tr><td class="name">5 · Retrieval и индексация</td><td class="num">3–5 ч</td><td>Да — параллельно шагу 4</td></tr>
+          <tr><td class="name">6 · Агенты</td><td class="num">3–5 ч</td><td>Нет — нужны шаги 4 и 5</td></tr>
+          <tr><td class="name">7 · Оркестрация</td><td class="num">2–3 ч</td><td>Нет</td></tr>
+          <tr><td class="name">8 · API и поток</td><td class="num">1–3 ч</td><td>Нет</td></tr>
+          <tr><td class="name">8.5 · Демо-стенд вместо ЛК</td><td class="num">3–5 ч</td><td>Да — параллельно шагу 9</td></tr>
+          <tr><td class="name">9 · Адаптеры Этапа 2</td><td class="num">2–3 ч</td><td>Да — параллельно шагу 10</td></tr>
+          <tr><td class="name">10 · Наблюдаемость и эталон</td><td class="num">2–4 ч</td><td>Да — параллельно шагу 9</td></tr>
+          <tr><td class="name">11 · Финал</td><td class="num">2–3 ч</td><td>Нет</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="formula">Итого:  26–47 ч
+Критический путь:  0 → 1 → 3 → 4 → 6 → 7 → 8 → 8.5 → 11
+При 4–6 ч в день:  примерно 7–10 рабочих дней</div>
+
+    <div class="note warn">
+      <b>Самый недооценённый шаг — нулевой.</b> Оценка «2–5 часов» верна только для генератора по известной схеме. Схема сейчас неизвестна: примеры структуры реальных систем не получены. Если они придут и разойдутся с гипотезой, переделывать придётся и генератор, и слепки, и часть проверок. Оценка может вырасти в два-три раза — и это единственное место в плане, где риск сроков сосредоточен по-настоящему.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="blockers">
+    <h2>10. Блокеры и допущения</h2>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Пункт</th><th>Что блокирует</th><th>Срок снятия</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Примеры структуры реальных систем не получены</td><td>Точность шага 0; при расхождении — переделка генератора, слепков и части проверок</td><td><span class="pill crit">до шага 0</span></td></tr>
+          <tr><td class="name">Спецификация API не доведена — семь остаточных проблем</td><td>Шаг 8: контрактные тесты закрепят дефекты спецификации как правильное поведение</td><td><span class="pill crit">до шага 8</span></td></tr>
+          <tr><td class="name">Компенсация при частичном отказе двух путей записи не спроектирована</td><td>Шаг 9: у сценария с аварийным обращением нет ожидаемого результата</td><td><span class="pill crit">до шага 9</span></td></tr>
+          <tr><td class="name">Поведение при недоступности Redis не определено</td><td>Шаг 4: неясно, отклонять запросы или работать без лимитов</td><td><span class="pill warn">до шага 4</span></td></tr>
+          <tr><td class="name">Учётные данные провайдера и корневые сертификаты</td><td>Шаг 4 в боевом режиме; офлайн-режим на локальной модели работает без них</td><td><span class="pill warn">до шага 4</span></td></tr>
+          <tr><td class="name">Хранилище готовых документов и срок жизни ссылки</td><td>Шаг 9: сейчас взято по аналогии с уже принятой технологией, подтверждения нет</td><td><span class="pill warn">до шага 9</span></td></tr>
+          <tr><td class="name">Решение о миграции автомата на другую библиотеку не оформлено</td><td>Ничего не блокирует: шаг 2 идёт на текущей библиотеке. Но пока решения нет, менять её кодом нельзя</td><td><span class="pill warn">P1</span></td></tr>
+          <tr><td class="name">Согласие на использование расшифровок звонков</td><td>Ничего в этом плане: источник намеренно исключён до появления согласия</td><td><span class="pill warn">до Этапа 3</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Смета по-прежнему отсутствует, и разработка её не заменяет.</b> Все шесть решений проекта остаются в статусе предложенных, потому что ни одно не может быть окончательно принято без расчёта стоимости. Работающий код это не меняет: он подтверждает техническую осуществимость, но не экономику. Разработку можно вести параллельно, а вот защищать бюджет — только после того, как количества из отчёта по мощностям будут умножены на реальные цены.
+    </div>
+  </section>
+
+  <footer>
+    Фаза 6 плана сборки. Структура кода — раздел 12.3 контекста, дефекты прототипа — раздел 11, контракт API — раздел 7, критерии готовности — раздел 18, состав моделей — ADR-007, доступ к внешним системам — ADR-003, окно обслуживания — ADR-005. Требования к проверкам каждого шага согласованы с <code>Test_Plan.html</code>; ресурсы машины — <code>Capacity_Report.html</code>, уровень 0.
+  </footer>
+
+</div>

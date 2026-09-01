@@ -1,0 +1,337 @@
+<meta charset="utf-8">
+<title>Отчёт по мощностям</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6FAFB; --surface:#FFFFFF; --surface-2:#EAF2F3; --ink:#10202A; --ink-muted:#4C6169;
+    --line:#D7E3E6; --accent:#0E7C86; --accent-ink:#063A40; --accent-2:#2C5DA8;
+    --good:#1B8F5E; --warn:#A66A12; --crit:#B33D26;
+    --good-bg:#E4F5EC; --warn-bg:#FBF0DC; --crit-bg:#FBE6E1;
+    --shadow: 0 1px 2px rgba(16,32,42,0.06), 0 10px 28px -14px rgba(16,32,42,0.22);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+      --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+      --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+      --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+    --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+    --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+    --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:"Public Sans","Segoe UI",sans-serif; font-size:16px; line-height:1.65; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif; font-weight:700; color:var(--ink); text-wrap:balance; margin:0;}
+  code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.92em;}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 28px 110px;}
+  .titlebar{padding:52px 28px 34px; border-bottom:1px solid var(--line); background:var(--surface);}
+  .titlebar-inner{max-width:1000px; margin:0 auto;}
+  .titlebar h1{font-size:clamp(1.8rem,4vw,2.3rem); letter-spacing:-.01em;}
+  .titlebar p{color:var(--ink-muted); margin-top:12px; max-width:680px; font-size:1.02rem;}
+  section.block{padding-top:52px;}
+  .block h2{font-size:1.35rem; margin-bottom:6px;}
+  .block h3{font-size:1.05rem; margin:26px 0 6px;}
+  .block .dek{color:var(--ink-muted); max-width:720px; margin-top:8px; font-size:14.5px;}
+  .table-wrap{overflow-x:auto; margin-top:18px;}
+  table.spec{width:100%; border-collapse:collapse; font-size:13.6px; min-width:640px;}
+  table.spec th{text-align:left; font-family:"JetBrains Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); padding:0 11px 9px; border-bottom:2px solid var(--line); white-space:nowrap;}
+  table.spec td{padding:10px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.spec tr:last-child td{border-bottom:none;}
+  table.spec td.name{font-weight:600;}
+  table.spec td.num{font-family:"JetBrains Mono",monospace; text-align:right; white-space:nowrap;}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; font-family:"JetBrains Mono",monospace; white-space:nowrap;}
+  .pill.good{color:var(--good); background:var(--good-bg);}
+  .pill.warn{color:var(--warn); background:var(--warn-bg);}
+  .pill.crit{color:var(--crit); background:var(--crit-bg);}
+  .note{margin-top:16px; padding:13px 16px; border-radius:8px; font-size:14px; background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--accent); color:var(--ink);}
+  .note.crit{border-left-color:var(--crit);}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--accent-ink);}
+  .formula{font-family:"JetBrains Mono",monospace; font-size:13px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 15px; margin-top:12px; overflow-x:auto; color:var(--ink);}
+  .finding{background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--crit); border-radius:9px; padding:16px 19px; margin-top:16px; box-shadow:var(--shadow);}
+  .finding h3{margin:0 0 6px; font-size:1.08rem; color:var(--crit);}
+  .finding p{margin:6px 0 0; font-size:14.2px;}
+  .tier{background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:16px 19px; margin-top:14px;}
+  .tier .tname{font-weight:700; font-size:1.02rem; font-family:"Zilla Slab",Georgia,serif;}
+  .tier .tsub{font-size:12.5px; color:var(--ink-muted); font-family:"JetBrains Mono",monospace; margin-top:2px;}
+  hr.rule{border:none; border-top:1px solid var(--line); margin:48px 0 0;}
+  footer{margin-top:56px; padding:22px 0 0; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-muted);}
+</style>
+
+<div class="titlebar">
+  <div class="titlebar-inner">
+    <h1>Отчёт по мощностям</h1>
+    <p>Три уровня: машина разработчика → MVP на один город (10 000 абонентов) → тираж (100 000 абонентов). Что и в каком количестве нужно, откуда взято каждое число и что меняется при кратном росте абонентской базы.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="block" id="scope">
+    <h2>0. Что здесь есть и чего здесь намеренно нет</h2>
+    <p class="dek">Отчёт закрывает строку матрицы сдачи «Отчёт по мощностям (прототип / MVP / тираж)», которая до сих пор существовала только в переписке.</p>
+
+    <div class="note crit">
+      <b>Цен в этом документе нет — сознательно.</b> Раздел 28.4 контекста запрещает заполнять смету числами «по аналогии»: именно так в проект попали недостоверные <code>7.3 млн ₽</code>, <code>53 дня</code>, <code>$800–1500/мес</code> из постороннего примера (раздел 26.4). Коммерческих предложений под этот проект нет, поэтому здесь считаются <b>количества</b> — ядра, гигабайты, токены, штуки GPU. Умножение на цены — отдельный шаг, когда появятся КП.
+    </div>
+
+    <div class="note">
+      Все количества выведены из фактов проекта: DoD (раздел 18), sizing (разделы 39.1, 39.2), деплой-схема, формулы разделов 28.1–28.3. Там, где факта нет, стоит явная пометка <b>ДОПУЩЕНИЕ</b> — таких мест пять, все собраны в разделе 1.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="assumptions">
+    <h2>1. Допущения — пять чисел, которых в проекте нет</h2>
+    <p class="dek">Вся цепочка расчёта опирается на них. Ни одно не подтверждено данными водоканала — их нужно либо получить из статистики ЛК и колл-центра, либо принять как гипотезу и проверить на пилоте.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>№</th><th>Величина</th><th class="num">низкий</th><th class="num">базовый</th><th class="num">высокий</th><th>Чем подтвердить</th></tr></thead>
+        <tbody>
+          <tr><td class="name">A1</td><td>Доля абонентов, обратившихся к помощнику хотя бы раз в месяц</td><td class="num">10%</td><td class="num">30%</td><td class="num">50%</td><td>Статистика посещаемости ЛК + доля, доходящая до формы обращения</td></tr>
+          <tr><td class="name">A2</td><td>Диалогов на такого абонента в месяц</td><td class="num">1,0</td><td class="num">1,5</td><td class="num">2,5</td><td>Частота обращений в колл-центр на абонента (источник 10)</td></tr>
+          <tr><td class="name">A3</td><td>Запросов к LLM внутри одного диалога</td><td class="num">3</td><td class="num">4</td><td class="num">6</td><td>Замер на пилоте; зависит от числа уточняющих вопросов Form Agent</td></tr>
+          <tr><td class="name">A4</td><td>Доля суточных запросов в пиковый час</td><td class="num" colspan="3">15%</td><td>Профиль ЖКХ: пики в дни начисления и оплаты</td></tr>
+          <tr><td class="name">A5</td><td>Токенов на запрос (вход + выход)</td><td class="num" colspan="3">3 200 + 300</td><td>Вход — из раздела 39.1: system + 3 чанка ×~800 + история + запрос. Выход — типовой ответ</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>A1–A3 — самые чувствительные.</b> Между низким и высоким сценарием разброс по нагрузке — <b>25 раз</b>. Любой вывод ниже нужно читать вместе с тем, какой сценарий взят.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="chain">
+    <h2>2. Цепочка вывода — от абонентов к нагрузке</h2>
+    <p class="dek">Считается не «сколько RPS хотим», а сколько получается из числа абонентов. Это принципиально: раздел 28.1 требовал оценить λ из ожидаемого числа активных абонентов, а не задать его волевым решением.</p>
+
+    <div class="formula">
+пользователей/мес = абоненты × A1<br>
+запросов/мес&nbsp;&nbsp;&nbsp;&nbsp; = пользователей/мес × A2 × A3<br>
+запросов/сутки&nbsp;&nbsp; = запросов/мес ÷ 30<br>
+λ пиковая (RPS) = запросов/сутки × A4 ÷ 3600<br>
+L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← закон Литтла, раздел 28.1; W = 3 с (DoD, раздел 18)<br>
+токенов/мес&nbsp;&nbsp;&nbsp;&nbsp; = запросов/мес × 3 500
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="tier0">
+    <h2>3. Уровень 0 — машина разработчика (прототип)</h2>
+    <p class="dek">Абонентов нет, нагрузки нет. Требования определяются не трафиком, а тем, что должно одновременно подняться на одной машине. Основано на разделе 39.2.</p>
+
+    <div class="tier">
+      <div class="tname">Базовый режим — разработка и отладка</div>
+      <div class="tsub">Backend + LLM Gateway + Qdrant + Redis + BGE-M3 (эмбеддинги на CPU)</div>
+      <div class="table-wrap">
+        <table class="spec">
+          <thead><tr><th>Ресурс</th><th class="num">Требуется</th><th>Комментарий</th></tr></thead>
+          <tbody>
+            <tr><td class="name">CPU</td><td class="num">4–6 ядер</td><td>Оркестрация и retrieval; генерация ответов — на внешнем API (GigaChat Pro, ADR-002)</td></tr>
+            <tr><td class="name">RAM</td><td class="num">6–8 ГБ</td><td>Qdrant с малой коллекцией + Postgres + Redis + процессы приложения</td></tr>
+            <tr><td class="name">Диск</td><td class="num">40–60 ГБ</td><td>Держать 100 ГБ свободных: образы, синтетика, индексы</td></tr>
+            <tr><td class="name">GPU</td><td class="num">не нужна</td><td>Основная модель внешняя; эмбеддинги на CPU приемлемы на объёме прототипа</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tier">
+      <div class="tname">Пиковый режим — с локальной тестовой LLM</div>
+      <div class="tsub">то же + Qwen2.5-7B-Instruct, INT4/GGUF, ~3,8 ГБ весов, на CPU</div>
+      <div class="table-wrap">
+        <table class="spec">
+          <thead><tr><th>Ресурс</th><th class="num">Требуется</th><th>Комментарий</th></tr></thead>
+          <tbody>
+            <tr><td class="name">CPU</td><td class="num">8–12 ядер</td><td>Генерация на CPU — основной потребитель; скорость низкая, но для smoke-тестов достаточна</td></tr>
+            <tr><td class="name">RAM</td><td class="num">16 ГБ минимум, 32 ГБ комфортно</td><td>Веса модели + KV-кэш + всё остальное одновременно</td></tr>
+            <tr><td class="name">Диск</td><td class="num">60–80 ГБ</td><td>+ веса модели и кэш Hugging Face</td></tr>
+            <tr><td class="name">GPU</td><td class="num">не нужна</td><td>Для офлайн-проверок Guardrails, PII и промптов без трат на платный API</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>Зачем вообще локальная LLM на прототипе.</b> Не для оценки задержки — для этого она непригодна. Она нужна, чтобы прогонять четыре сценария безопасности из раздела 36.6 (инъекция, утечка ПДн, ПДн на входе, токсичный ответ) не платя за внешний API на каждой итерации. Выбор модели с обоснованием фиксируется в <code>docs/model-choice.md</code> (код-шаг 0.5).
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="tier12">
+    <h2>4. Уровни 1 и 2 — MVP и тираж</h2>
+    <p class="dek">Один город против всей абонентской базы. Кратность роста — ×10.</p>
+
+    <h3>Уровень 1 — MVP, один город: 10 000 абонентов</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Сценарий</th><th class="num">польз./мес</th><th class="num">запросов/мес</th><th class="num">запросов/сут</th><th class="num">λ пик, RPS</th><th class="num">L</th><th class="num">токенов/мес</th><th>Триггер 50M</th></tr></thead>
+        <tbody>
+          <tr><td class="name">низкий</td><td class="num">1 000</td><td class="num">3 000</td><td class="num">100</td><td class="num">0,004</td><td class="num">0,01</td><td class="num">10,5 млн</td><td><span class="pill good">нет</span></td></tr>
+          <tr><td class="name">базовый</td><td class="num">3 000</td><td class="num">18 000</td><td class="num">600</td><td class="num">0,025</td><td class="num">0,08</td><td class="num">63,0 млн</td><td><span class="pill crit">ДА</span></td></tr>
+          <tr><td class="name">высокий</td><td class="num">5 000</td><td class="num">75 000</td><td class="num">2 500</td><td class="num">0,104</td><td class="num">0,31</td><td class="num">262,5 млн</td><td><span class="pill crit">ДА</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Уровень 2 — тираж: 100 000 абонентов</h3>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Сценарий</th><th class="num">польз./мес</th><th class="num">запросов/мес</th><th class="num">запросов/сут</th><th class="num">λ пик, RPS</th><th class="num">L</th><th class="num">токенов/мес</th><th>Триггер 50M</th></tr></thead>
+        <tbody>
+          <tr><td class="name">низкий</td><td class="num">10 000</td><td class="num">30 000</td><td class="num">1 000</td><td class="num">0,042</td><td class="num">0,12</td><td class="num">105 млн</td><td><span class="pill crit">ДА</span></td></tr>
+          <tr><td class="name">базовый</td><td class="num">30 000</td><td class="num">180 000</td><td class="num">6 000</td><td class="num">0,250</td><td class="num">0,75</td><td class="num">630 млн</td><td><span class="pill crit">ДА</span></td></tr>
+          <tr><td class="name">высокий</td><td class="num">50 000</td><td class="num">750 000</td><td class="num">25 000</td><td class="num">1,042</td><td class="num">3,12</td><td class="num">2 625 млн</td><td><span class="pill crit">ДА</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Конкурентность L нигде не превышает 3,2.</b> Даже в самом тяжёлом сценарии тиража одновременно обрабатывается около трёх запросов. Это означает, что асинхронная модель обработки (раздел 28.1) закрывает задачу с большим запасом, а горизонтальное масштабирование нужно для отказоустойчивости, а не ради пропускной способности.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="findings">
+    <h2>5. Три вывода, которые меняют принятые решения</h2>
+    <p class="dek">Не пересказ таблиц, а то, что из них следует для ADR-002, ADR-005 и раздела 39.1.</p>
+
+    <div class="finding">
+      <h3>Вывод 1. Sizing раздела 39.1 переразмерен примерно в 20 раз</h3>
+      <p>Раздел 39.1 считал GPU-конфигурацию под <b>ПРЕДПОЛОЖЕНИЕ</b> λ = 5 RPS и L = 15, и получил Qwen2.5-32B в INT4 на A100 80GB. Фактически при 100 000 абонентов в базовом сценарии λ = 0,25 RPS и L = 0,75.</p>
+      <p>Чтобы λ достигла 5 RPS при тех же A1–A4, нужно около <b>2 000 000 абонентов</b> — в 20 раз больше всей заявленной абонентской базы. Даже λ = 1 RPS требует ~400 000 абонентов.</p>
+      <p>Само предположение λ = 5 RPS было честно помечено в разделе 39.1 как не подтверждённое. Теперь понятно, насколько оно консервативно. Расчёт VRAM при этом не отменяется — он всё ещё верен для своей нагрузки, — но выбор GPU под тираж следует пересчитать под реальную конкурентность, где решающим будет не пропускная способность, а время генерации при batch = 1.</p>
+    </div>
+
+    <div class="finding">
+      <h3>Вывод 2. Триггер «50 млн токенов/мес» срабатывает уже на MVP — и, похоже, измеряет не то</h3>
+      <p>В базовом сценарии один абонент даёт ~6 300 токенов в месяц. Порог 50 млн достигается при <b>≈ 7 900 абонентах</b> — то есть MVP на 10 000 абонентов его уже превышает (63 млн), не дожидаясь никакого тиража.</p>
+      <p>При этом λ в этот момент — 0,025 RPS. Триггер №2 ADR-002 задумывался как экономический сигнал «SaaS стал дороже собственного железа», но стоимость self-hosted определяется <b>пиковой конкурентностью</b>, а не суммарным объёмом токенов. При 0,025 RPS выделенная A100 простаивала бы более 99% времени. Объём токенов здесь велик не от нагрузки, а от длины контекста: 3 500 токенов на запрос при RAG с тремя чанками по ~800.</p>
+      <p>Раздел 28.4 прямо предусматривал такой исход: «при расхождении обновить сам триггер в ADR-002, а не игнорировать расхождение». Формулировку триггера №2 следует пересмотреть — либо повысить порог, либо привязать его к конкурентности и стоимости владения, а не к абсолютному числу токенов.</p>
+    </div>
+
+    <div class="finding">
+      <h3>Вывод 3. Размер GPU определяет ETL-реиндекс, а не трафик абонентов</h3>
+      <p>Онлайн-контур тратит на запрос один эмбеддинг и один реранжинг top_k = 20. При λ = 0,25 RPS (тираж, базовый) это даёт загрузку карты порядка <b>1%</b>; при MVP — около 0,1%.</p>
+      <p>Значит, одна GPU покрывает онлайн-контур с запасом в два порядка на всём диапазоне до тиража включительно. Реальным потребителем GPU остаётся пакетная переиндексация базы знаний — то есть <b>решение ADR-005 (окно обслуживания) определяет размер GPU-пула, а нагрузка абонентов на него практически не влияет</b>.</p>
+      <p>Это усиливает ADR-005: условие пересмотра там сформулировано через длительность ночного job, а не через рост трафика — и, как теперь видно, это единственно верная привязка.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="storage">
+    <h2>6. Хранилища — растут медленнее, чем кажется</h2>
+    <p class="dek">По формулам раздела 28.3. База знаний — около тысячи документов (раздел 31), а не петабайты.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Хранилище</th><th class="num">MVP (10 тыс.)</th><th class="num">Тираж (100 тыс.)</th><th>Чем определяется</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Qdrant — векторы</td><td class="num">≈ 195 МБ</td><td class="num">≈ 195 МБ</td><td>Только размером базы знаний: 20 000 чанков × 1024-d float32 × 2,5 (payload + HNSW). <b>От числа абонентов не зависит вообще</b></td></tr>
+          <tr><td class="name">Loki — логи</td><td class="num">≈ 0,2 ГБ / 30 дней</td><td class="num">≈ 1,7 ГБ / 30 дней</td><td>Запросов/сутки × ~10 записей трассировки × ~1 КБ. Растёт линейно с трафиком; критична политика ротации, а не объём</td></tr>
+          <tr><td class="name">ClickHouse — телеметрия</td><td class="num">≈ 0,1 ГБ/год</td><td class="num">≈ 1,0 ГБ/год</td><td>1 запись на запрос ~0,5 КБ, без учёта сжатия</td></tr>
+          <tr><td class="name">Postgres — сессии, Sync State, MV профиля</td><td class="num">единицы ГБ</td><td class="num">десятки ГБ</td><td>Логи диалогов (источник 6) и кэш профиля; определяется сроком хранения диалогов, а не пиковой нагрузкой</td></tr>
+          <tr><td class="name">S3 / MinIO</td><td class="num">десятки ГБ</td><td class="num">сотни ГБ</td><td>Data Lake Raw Zone, курируемый корпус, бэкапы, готовые документы обращений</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Векторная база не растёт от числа абонентов.</b> Она зависит только от объёма базы знаний. Это значит, что переход от одного города к тиражу не требует ни пересмотра Qdrant, ни изменения параметров HNSW (ADR-006) — при условии, что база знаний общая для всех городов.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="scaling">
+    <h2>7. План тиража — что меняется при кратном росте, а что нет</h2>
+    <p class="dek">Переход 10 000 → 100 000 абонентов, ×10 по нагрузке.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Компонент</th><th>Что происходит при ×10</th><th>Действие</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Qdrant</td><td>Ничего — объём определяется базой знаний</td><td><span class="pill good">без изменений</span></td></tr>
+          <tr><td class="name">Embedding / Reranker Inference</td><td>Загрузка растёт с ~0,1% до ~1%</td><td><span class="pill good">без изменений</span> — одна GPU, размер диктует ETL (ADR-005)</td></tr>
+          <tr><td class="name">Backend, LLM Gateway</td><td>L растёт с 0,08 до 0,75 — всё ещё меньше единицы</td><td><span class="pill good">реплики как есть</span> — 2–3 для отказоустойчивости, не для пропускной способности</td></tr>
+          <tr><td class="name">Loki, ClickHouse</td><td>Линейный рост ×10</td><td><span class="pill warn">пересмотреть ротацию</span> — объёмы малы, но политика хранения обязана быть задана</td></tr>
+          <tr><td class="name">Postgres</td><td>Логи диалогов растут ×10</td><td><span class="pill warn">задать срок хранения диалогов</span> — иначе растёт неограниченно</td></tr>
+          <tr><td class="name">Расход токенов</td><td>63 млн → 630 млн в месяц</td><td><span class="pill crit">главная статья OPEX</span> — единственное, что растёт болезненно</td></tr>
+          <tr><td class="name">ETL-окно (ADR-005)</td><td>Ничего — зависит от базы знаний, не от абонентов</td><td><span class="pill good">без изменений</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Единственный компонент, который действительно масштабируется с абонентами, — расход токенов.</b> Инфраструктура при ×10 практически не меняется. Это разворачивает привычную логику: экономика тиража — это почти целиком экономика обращений к модели, а не стоимость железа. И именно поэтому вывод 2 (пересмотр триггера) важнее, чем выбор конфигурации GPU.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="tocost">
+    <h2>8. Что нужно, чтобы это стало сметой</h2>
+    <p class="dek">Количества посчитаны. Дальше — умножение на цены, которых у проекта нет.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Статья</th><th>Количество — уже посчитано</th><th>Цена — заполнить из КП</th></tr></thead>
+        <tbody>
+          <tr><td class="name">OPEX · токены LLM</td><td>63 млн/мес (MVP) · 630 млн/мес (тираж), базовый сценарий</td><td>Тариф провайдера за 1000 токенов, раздельно вход/выход</td></tr>
+          <tr><td class="name">OPEX · токены LLM-judge</td><td>39 млн/мес (MVP) · 120 млн/мес (тираж). Из них <b>30 млн — ночной батч Golden Set, не зависит от числа абонентов</b>; остальное — выборочная оценка 5% прод-трафика</td><td>Тариф провайдера-судьи (YandexGPT, ADR-007) — отдельно от тарифа генерации</td></tr><tr><td class="name">OPEX · узлы кластера</td><td>Пулы general / gpu / data по деплой-схеме; L &lt; 1 — реплик нужно минимум</td><td>Стоимость узла в месяц или амортизация собственного железа</td></tr>
+          <tr><td class="name">OPEX · хранилище</td><td>Единицы ГБ на MVP, десятки–сотни на тираже</td><td>Стоимость ГБ/мес по классам: NVMe, обычный диск, объектное</td></tr>
+          <tr><td class="name">OPEX · наблюдаемость</td><td>Loki 0,2–1,7 ГБ/30 дней, ClickHouse 0,1–1,0 ГБ/год</td><td>Входит в стоимость узлов и хранилища</td></tr>
+          <tr><td class="name">CAPEX · разработка</td><td>Человеко-часы по ролям RACI (раздел 14) и фазам <code>Build_Plan.html</code></td><td>Внутренняя ставка по ролям</td></tr>
+          <tr><td class="name">CAPEX · GPU (только self-hosted)</td><td>1× A100 80GB по разделу 39.1 — <b>требует пересчёта</b> после вывода 1</td><td>Закупка или аренда</td></tr>
+          <tr><td class="name">CAPEX · обучение / поддержка K8s</td><td>Не оценено — выделенного инженера в команде нет (ADR-004)</td><td>Внешняя поддержка или обучение</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note crit">
+      <b>Оценка качества — вторая по величине статья токенов, и на MVP она почти равна генерации.</b> Судья добавляет <b>+62%</b> к расходу токенов на MVP (39 млн против 63 млн у генерации) и <b>+19%</b> на тираже. Причина в структуре: ночной прогон по Golden Set стоит одинаково при любом числе абонентов — это <b>фиксированный пол</b> расходов на качество, который на малом масштабе доминирует. Практический вывод: на MVP имеет смысл считать частоту ночных прогонов и долю выборки прод-трафика управляемыми параметрами бюджета, а не константами. Все числа опираются на допущение о 5 вызовах судьи по ~2000 токенов на один оцениваемый образец — требует замера на первом же прогоне Ragas.
+    </div>
+
+    <div class="note warn">
+      <b>Порядок действий для точки окупаемости (раздел 28.4).</b> Посчитать OPEX управляемого API при 63 и 630 млн токенов; отдельно — амортизацию CAPEX self-hosted плюс его OPEX. Объём, при котором вторая сумма меньше первой, и есть фактический экономический порог перехода. Сверить его с порогом 50 млн токенов из ADR-002 — и, с учётом вывода 2, ожидать расхождения.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block" id="open">
+    <h2>9. Что остаётся открытым</h2>
+    <div class="table-wrap">
+      <table class="spec">
+        <thead><tr><th>Пункт</th><th>Статус</th><th>Что закроет</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Допущения A1–A3</td><td><span class="pill crit">не подтверждены</span></td><td>Статистика ЛК и колл-центра; до этого разброс выводов — 25 раз</td></tr>
+          <tr><td class="name">Цены</td><td><span class="pill crit">нет ни одной</span></td><td>КП и тарифы; без них смета не считается (P0 №1, раздел 27)</td></tr>
+          <tr><td class="name">Пересчёт GPU под реальную λ</td><td><span class="pill warn">следует из вывода 1</span></td><td>Расчёт по разделу 28.2 при batch = 1, а не под λ = 5 RPS</td></tr>
+          <tr><td class="name">Пересмотр триггера №2 ADR-002</td><td><span class="pill warn">следует из вывода 2</span></td><td>Правка ADR-002: привязка к конкурентности и TCO вместо абсолютного числа токенов</td></tr>
+          <tr><td class="name">Числа DoD</td><td><span class="pill crit">P0 №2, не закрыт</span></td><td>TTFT &lt; 500 мс и P99 &lt; 100 мс по-прежнему не подкреплены расчётом под конкретную GPU и модель</td></tr>
+          <tr><td class="name">Срок хранения диалогов</td><td><span class="pill warn">не задан</span></td><td>Политика ретенции — иначе Postgres растёт неограниченно</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Источники чисел: разделы 18 (DoD), 28.1–28.4 (формулы), 31 (объём базы знаний), 39.1–39.2 (sizing), ADR-002, ADR-005, ADR-006, деплой-схема <code>C4_Deployment.html</code>. Допущения A1–A5 — гипотезы этого документа, фактами проекта не являются.
+  </footer>
+</div>

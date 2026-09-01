@@ -1,0 +1,287 @@
+<meta charset="utf-8">
+<title>Запрос данных</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6FAFB; --surface:#FFFFFF; --surface-2:#EAF2F3; --ink:#10202A; --ink-muted:#4C6169;
+    --line:#D7E3E6; --accent:#0E7C86; --accent-ink:#063A40; --accent-2:#2C5DA8;
+    --good:#1B8F5E; --warn:#A66A12; --crit:#B33D26;
+    --good-bg:#E4F5EC; --warn-bg:#FBF0DC; --crit-bg:#FBE6E1;
+    --shadow: 0 1px 2px rgba(16,32,42,0.06), 0 10px 28px -14px rgba(16,32,42,0.22);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+      --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+      --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+      --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1519; --surface:#111C21; --surface-2:#17242A; --ink:#E7F1F2; --ink-muted:#93A9AE;
+    --line:#233238; --accent:#3FC7D1; --accent-ink:#BEF1F4; --accent-2:#7FA6EE;
+    --good:#4FCB93; --warn:#E3AE55; --crit:#E88A76;
+    --good-bg:#123326; --warn-bg:#332608; --crit-bg:#331611;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 14px 34px -16px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:"Public Sans","Segoe UI",sans-serif; font-size:16px; line-height:1.65; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif; font-weight:700; color:var(--ink); text-wrap:balance; margin:0;}
+  code{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.92em;}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 28px 110px;}
+  .titlebar{padding:52px 28px 34px; border-bottom:1px solid var(--line); background:var(--surface);}
+  .titlebar-inner{max-width:1000px; margin:0 auto;}
+  .titlebar h1{font-size:clamp(1.8rem,4vw,2.3rem); letter-spacing:-.01em;}
+  .titlebar p{color:var(--ink-muted); margin-top:12px; max-width:680px; font-size:1.02rem;}
+  section.block{padding-top:52px;}
+  .block h2{font-size:1.35rem; margin-bottom:6px;}
+  .block h3{font-size:1.05rem; margin:26px 0 6px;}
+  .block .dek{color:var(--ink-muted); max-width:720px; margin-top:8px; font-size:14.5px;}
+  .table-wrap{overflow-x:auto; margin-top:18px;}
+  table.spec{width:100%; border-collapse:collapse; font-size:13.6px; min-width:860px;}
+  table.spec th{text-align:left; font-family:"JetBrains Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); padding:0 11px 9px; border-bottom:2px solid var(--line); white-space:nowrap;}
+  table.spec td{padding:10px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.spec tr:last-child td{border-bottom:none;}
+  table.spec td.name{font-weight:600;}
+  table.spec td.num{font-family:"JetBrains Mono",monospace; text-align:right; white-space:nowrap;}
+  table.spec td.file{font-family:"JetBrains Mono",monospace; font-size:12.4px; white-space:nowrap;}
+  table.spec tr.key td{background:var(--surface-2);}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; font-family:"JetBrains Mono",monospace; white-space:nowrap;}
+  .pill.good{color:var(--good); background:var(--good-bg);}
+  .pill.warn{color:var(--warn); background:var(--warn-bg);}
+  .pill.crit{color:var(--crit); background:var(--crit-bg);}
+  .note{margin-top:16px; padding:13px 16px; border-radius:8px; font-size:14px; background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--accent); color:var(--ink);}
+  .note.crit{border-left-color:var(--crit);}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--accent-ink);}
+  ol.prio{margin:14px 0 0; padding-left:22px; font-size:14.5px;}
+  ol.prio li{margin-bottom:9px;}
+  hr.rule{border:none; border-top:1px solid var(--line); margin:48px 0 0;}
+  footer{margin-top:56px; padding:22px 0 0; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-muted);}
+</style>
+
+<div class="titlebar">
+  <div class="titlebar-inner">
+    <h1>Запрос данных для разработки AI-помощника абонента</h1>
+    <p>Что нужно получить от владельцев систем, чтобы начать разработку прототипа. Всё остальное
+    генерируется синтетически на нашей стороне.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="block">
+    <h2>Главное, что стоит понять сразу</h2>
+    <p class="dek">Нам <b>не нужны реальные данные абонентов</b> и не нужен доступ к боевым системам —
+    он не запрашивается и не предполагается.</p>
+
+    <div class="note">
+      Нужна <b>структура</b>: перечень полей, их типы и по несколько обезличенных строк-образцов,
+      чтобы наш генератор воспроизводил форму настоящих данных. Прототип работает на локальных базах,
+      наполненных выдуманными записями.
+    </div>
+
+    <p class="dek" style="margin-top:18px">Генератор синтетических данных — первый шаг разработки, от
+    него зависят поиск, адаптеры и все проверки. Пока структура неизвестна, он строится на гипотезе,
+    и при расхождении переделывать придётся и генератор, и слепки баз, и часть тестов.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block">
+    <h2>Что нужно получить</h2>
+    <p class="dek">Кодировка везде UTF-8, разделитель CSV — точка с запятой. Два выделенных пункта —
+    самые срочные, обоснование ниже.</p>
+
+    <div class="table-wrap">
+      <table class="spec">
+        <thead>
+          <tr>
+            <th>№</th><th>Что нужно</th><th>Формат</th><th>Состав</th><th>Объём</th><th>От кого</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="key">
+            <td class="num">1</td>
+            <td class="name">Обращения абонентов с текстами</td>
+            <td class="file">inquiries_sample.csv</td>
+            <td>Номер; даты создания и закрытия; <b>тип обращения — код и название так, как ведётся в
+            системе</b>; подтип; статус и полный перечень возможных статусов; подразделение-исполнитель;
+            канал поступления; <b>текст обращения</b>; резолюция</td>
+            <td class="num">50–100 строк</td>
+            <td>Владелец БД обращений</td>
+          </tr>
+          <tr class="key">
+            <td class="num">2</td>
+            <td class="name">Справочник типов обращений целиком</td>
+            <td class="file">inquiry_types_reference.csv<br>либо текстовый ответ</td>
+            <td>Код и название каждого типа так, как они заведены в системе</td>
+            <td class="num">все строки</td>
+            <td>Владелец БД обращений</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="name">Образцы документов базы знаний</td>
+            <td class="file">.docx<br>исходные файлы</td>
+            <td>По 2–3 файла каждого вида: регламент, инструкция по биллингу, инструкция по общению с
+            абонентом, типовая форма заявления, устав или оферта. Плюс <b>общее количество документов
+            и суммарный объём</b> хранилища</td>
+            <td class="num">10–15 файлов</td>
+            <td>Владелец базы знаний</td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="name">Биллинг — лицевые счета</td>
+            <td class="file">billing_accounts_sample.csv</td>
+            <td>Номер лицевого счёта; ФИО; адрес; тип абонента (физическое или юридическое лицо);
+            статус договора; баланс и задолженность; дата открытия</td>
+            <td class="num">20–30 строк</td>
+            <td>Владелец Биллинга</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="name">Биллинг — начисления</td>
+            <td class="file">billing_charges_sample.csv</td>
+            <td>Номер счёта; расчётный период; начислено, оплачено, задолженность; вид услуги;
+            основание начисления — по счётчику, по нормативу или перерасчёт</td>
+            <td class="num">30–50 строк</td>
+            <td>Владелец Биллинга</td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="name">Биллинг — счётчики и поверка</td>
+            <td class="file">billing_meters_sample.csv</td>
+            <td>Номер счёта; заводской номер счётчика; даты установки и последней поверки; срок
+            следующей поверки; последние показания и дата их передачи</td>
+            <td class="num">20–30 строк</td>
+            <td>Владелец Биллинга</td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="name">Личный кабинет — профиль абонента</td>
+            <td class="file">lk_users_sample.csv</td>
+            <td>Идентификатор пользователя кабинета; связь с лицевым счётом — один к одному или один
+            ко многим; телефон; электронная почта; канал входа</td>
+            <td class="num">20–30 строк</td>
+            <td>Владелец кабинета</td>
+          </tr>
+          <tr>
+            <td class="num">8</td>
+            <td class="name">Диспетчерская — аварийные заявки</td>
+            <td class="file">dispatch_incidents_sample.csv</td>
+            <td>Идентификатор заявки; зона или адрес отключения; статус; плановое время восстановления;
+            тип аварии</td>
+            <td class="num">10–20 строк</td>
+            <td>Владелец диспетчерской</td>
+          </tr>
+          <tr>
+            <td class="num">9</td>
+            <td class="name">Реестр договоров — перечень, не сами файлы</td>
+            <td class="file">contracts_registry_sample.csv</td>
+            <td>Имя файла и соглашение об именовании; к какому типу обращения относится; версия и дата
+            вступления в силу; <b>общее количество документов</b> в реестре</td>
+            <td class="num">20–30 строк</td>
+            <td>Владелец реестра</td>
+          </tr>
+          <tr>
+            <td class="num">10</td>
+            <td class="name">Публичный FAQ и материалы сайта</td>
+            <td class="file">ссылка либо выгрузка</td>
+            <td>Вопросы и ответы. Данные публичные, ограничений нет</td>
+            <td class="num">—</td>
+            <td>Открытые данные</td>
+          </tr>
+          <tr>
+            <td class="num">11</td>
+            <td class="name">Описания интерфейсов внешних систем</td>
+            <td class="file">документация<br>или текст</td>
+            <td>Биллинг: перечень методов XML-RPC с сигнатурами. Микросервис обращений: API регистрации
+            обращения. Диспетчерская: REST для чтения статуса аварий и создания заявок</td>
+            <td class="num">—</td>
+            <td>Владельцы систем</td>
+          </tr>
+          <tr>
+            <td class="num">12</td>
+            <td class="name">Доступы Yandex Cloud</td>
+            <td class="file">защищённый канал,<br>не переписка</td>
+            <td>Ключ API и идентификатор каталога. Значения в репозиторий не попадают</td>
+            <td class="num">—</td>
+            <td>Администратор облака</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>Обезличивание.</b> ФИО, адреса, номера счетов, телефоны и электронную почту заменить на
+      выдуманные, сохранив <b>формат</b> значений. В обращениях (пункт 1) обезличить те же поля, но
+      <b>формулировки самих обращений оставить как есть</b> — именно они и представляют ценность,
+      всё остальное мы сгенерируем.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block">
+    <h2>Приоритет, если получить всё сразу не выйдет</h2>
+
+    <ol class="prio">
+      <li><b>Пункты 1 и 2 — обращения с текстами и справочник типов.</b> Обращения — единственный
+      источник настоящих формулировок абонентов: по ним настраивается классификация и собирается
+      эталонный набор для оценки качества. Справочник отвечает на вопрос, который может добавить
+      незапланированную работу, — см. ниже.</li>
+      <li><b>Пункт 3 — образцы документов базы знаний.</b> От структуры документов — как оформлены
+      заголовки, таблицы, приложения — напрямую зависит нарезка текста на фрагменты, а от неё
+      качество поиска.</li>
+      <li><b>Пункты 4–6 — структура Биллинга.</b></li>
+      <li><b>Пункт 11 — описания интерфейсов.</b> Нужны позже, к шагу адаптеров.</li>
+      <li>Остальное.</li>
+    </ol>
+
+    <div class="note">
+      <b>Пункт 12 идёт другому адресату</b> — администратору облачной учётной записи, а не владельцам
+      систем. Запрос можно отправить параллельно и не ждать остальных.
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block">
+    <h2>Вопрос, от ответа на который зависит объём работ</h2>
+
+    <div class="note crit">
+      Справочник типов обращений в вашей системе — он совпадает с десятью категориями, которые мы
+      приняли (перерасчёт, поверка счётчика, сверка расчётов, заключение договора, расторжение
+      договора, задолженность, качество воды, авария, смена тарифа, прочее), <b>или там своя
+      номенклатура</b>?
+    </div>
+
+    <p class="dek" style="margin-top:16px">Если своя — нужен полный справочник кодов и названий:
+    понадобится таблица соответствия между вашими типами и нашими. Это отдельная работа, которая
+    сейчас не запланирована ни в одном плане проекта, и чем позже вопрос прояснится, тем дороже
+    обойдётся.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="block">
+    <h2>Что происходит, пока данных нет</h2>
+
+    <p class="dek">Разработка не останавливается: подготовка локальной модели, справочника типов,
+    конечного автомата и слоя защиты персональных данных от этих данных не зависит и выполняется
+    первой.</p>
+
+    <div class="note warn">
+      Но генератор синтетики строится на гипотезе о структуре. При последующем расхождении
+      переделывать придётся сам генератор, слепки баз и часть проверок — <b>оценка этого шага
+      вырастет примерно втрое</b>.
+    </div>
+  </section>
+
+  <footer>
+    Сводная таблица запроса данных. Полная версия с обоснованием по каждому пункту, перечнем того, что
+    мы генерируем сами, и того, что не запрашивается принципиально, — <code>Data_Request.md</code>.
+  </footer>
+
+</div>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<title>LLM Gateway — описание компонентов (C4 L3)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  .llmgw-doc{
+    max-width:900px; margin:48px auto 96px; padding:0 24px;
+    font-family:"Public Sans", "Segoe UI", sans-serif; font-size:15.5px; line-height:1.6;
+    color:#10202A;
+  }
+  .llmgw-doc h2{
+    font-family:"Zilla Slab", Georgia, serif; font-size:1.6rem; font-weight:700;
+    margin:0 0 4px; color:#063A40;
+  }
+  .llmgw-doc .sub{color:#4C6169; font-size:14px; margin-bottom:20px;}
+  .llmgw-doc p{margin:0 0 14px;}
+  .llmgw-doc .rule-note{
+    background:#EAF2F3; border:1px solid #D7E3E6; border-left:3px solid #0E7C86;
+    border-radius:6px; padding:12px 14px; font-size:14px; color:#10202A; margin:0 0 24px;
+  }
+  .llmgw-doc .rule-note b{color:#063A40;}
+  table.llmgw-comp{
+    width:100%; border-collapse:collapse; font-size:14px; margin-top:8px;
+  }
+  table.llmgw-comp th{
+    text-align:left; font-family:"JetBrains Mono",monospace; font-size:11px;
+    text-transform:uppercase; letter-spacing:.05em; color:#4C6169;
+    padding:0 10px 8px; border-bottom:2px solid #D7E3E6;
+  }
+  table.llmgw-comp td{padding:11px 10px; border-bottom:1px solid #D7E3E6; vertical-align:top;}
+  table.llmgw-comp tr:last-child td{border-bottom:none;}
+  table.llmgw-comp td.name{font-weight:600; white-space:nowrap;}
+  table.llmgw-comp td.tag{font-family:"JetBrains Mono",monospace; font-size:12px; color:#0E7C86; white-space:nowrap;}
+</style>
+</head>
+<body>
+<div class="llmgw-doc">
+  <h2>LLM Gateway — описание компонентов (L3)</h2>
+
+  <p>
+    LLM Gateway — единственная точка, через которую Backend обращается к LLM Provider. На входе он
+    отвечает за то, чтобы наружу не ушли персональные данные абонента; на выходе — за то, чтобы к абоненту
+    не пришёл небезопасный или недостоверный (галлюцинация) ответ. Между этими двумя проверками находится
+    готовое ядро (LiteLLM Core), которое просто маршрутизирует и стримит.
+  </p>
+
+  <table class="llmgw-comp">
+    <thead>
+      <tr><th>Компонент</th><th>Технология</th><th>Роль в потоке</th><th>Что делает</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="name">PII Sanitizer</td>
+        <td class="tag">Presidio + custom recognizers</td>
+        <td>Вход, sync</td>
+        <td>Принимает промпт от Backend и скрывает ПДн (ФИО, СНИЛС, ИНН, лицевой счёт, телефон, email) до
+          того, как запрос уйдёт к LLM Provider. В лог пишется только <code>pii_report</code>, сырые ПДн — никогда.</td>
+      </tr>
+      <tr>
+        <td class="name">Guardrails</td>
+        <td class="tag">custom validators + LLM-judge</td>
+        <td>Выход, sync + async</td>
+        <td>Проверяет ответ модели перед тем, как он попадёт к абоненту. Быстрая sync-проверка (PII в
+          выводе, токсичность, policy) обрывает поток и возвращает safe fallback при нарушении — без
+          задержки основного пути. Более дорогая оценка groundedness/faithfulness выполняется асинхронно
+          после завершения стрима и не блокирует ответ абоненту.</td>
+      </tr>
+      <tr>
+        <td class="name">Quota Manager</td>
+        <td class="tag">slowapi + Redis</td>
+        <td>Вход, sync</td>
+        <td>RPS- и месячные квоты на абонента и сессию + глобальный лимит на сервис; источник счётчиков —
+          Redis. При превышении — 429 + <code>Retry-After</code> (RFC 7807).</td>
+      </tr>
+      <tr>
+        <td class="name">Billing Callback</td>
+        <td class="tag">clickhouse-connect</td>
+        <td>Выход, async</td>
+        <td>Пишет токены, стоимость и latency каждого вызова в ClickHouse (аналитика использования) —
+          не в критическом пути ответа.</td>
+      </tr>
+      <tr>
+        <td class="name">LiteLLM Core</td>
+        <td class="tag">Off-the-shelf: Python Proxy</td>
+        <td>Центр</td>
+        <td>Готовое ядро: OpenAI-совместимый API, маршрутизация моделей и fallback, retry / circuit
+          breaker / timeout, адаптеры провайдеров, SSE-стриминг токенов.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
