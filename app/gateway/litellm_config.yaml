@@ -34,9 +34,14 @@ model_list:
   # [ТРЕБУЕТ ПОДТВЕРЖДЕНИЯ на шаге 4] Точный вид имени модели, адреса и способа
   # авторизации сверить с документацией Yandex Cloud, а не принимать отсюда на
   # веру: значения ниже — ожидаемая форма, не подтверждённый факт.
+  #
+  # ВНИМАНИЕ: LiteLLM подставляет `os.environ/` только ЦЕЛЫМ значением, а не
+  # внутри строки. Проверено на версии 1.99.0: `gpt://os.environ/FOLDER/...`
+  # разворачивается в None. Поэтому имя модели целиком выносится в одну
+  # переменную YANDEX_MODEL_URI, а не собирается здесь из кусков.
   - model_name: yandexgpt
     litellm_params:
-      model: openai/gpt://os.environ/YANDEX_FOLDER_ID/yandexgpt/latest
+      model: os.environ/YANDEX_MODEL_URI
       api_base: os.environ/YANDEX_API_BASE
       api_key: os.environ/YANDEX_API_KEY
       timeout: 60
