@@ -32,7 +32,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -127,7 +127,7 @@ class LocalTestBackend:
         timeout: float = DEFAULT_TIMEOUT,
         app_env: str = "local",
         completion_fn: Callable[..., Any] | None = None,
-        http_get: Callable[..., Any] | None = None,
+        http_get: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
