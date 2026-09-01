@@ -26,15 +26,26 @@ class Settings(BaseSettings):
 
     app_env: Environment = "local"
 
-    # Псевдоним провайдера из app/gateway/litellm_config.yaml.
+    # Псевдоним провайдера из app/gateway/litellm_config.yaml:
+    # local-test | yandexgpt | gigachat.
     # Смена этого значения — единственное, что требуется для перехода
     # локальная модель <-> управляемый API (ADR-002, вариант C).
+    #
+    # Генерация на прототипе — yandexgpt, на MVP — gigachat: последний требует
+    # корневых сертификатов НУЦ Минцифры, которых на прототипе не будет
+    # (контекст, раздел 46).
     llm_provider: str = "local-test"
 
     # Локальная тестовая модель (шаг 0.5)
     ollama_base_url: str = "http://localhost:11434"
     local_model: str = "qwen2.5:7b-instruct-q4_K_M"
     local_timeout_seconds: float = 120.0
+
+    # YandexGPT — генерация на прототипе, судья качества на MVP.
+    # Штатного провайдера в LiteLLM нет, поэтому адрес задаётся явно.
+    yandex_api_key: str = ""
+    yandex_folder_id: str = ""
+    yandex_api_base: str = "https://llm.api.cloud.yandex.net/v1"
 
     @property
     def is_production(self) -> bool:
