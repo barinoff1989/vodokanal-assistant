@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     > выведены из нагрузки: она известна только оценочно и с разбросом в 25 раз
     > (раздел 42.1). Пересчитать после подтверждения допущений A1–A3."""
 
+    # --- Счётчики лимитов и состояние сессии (шаг 4) ------------------------- #
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+
     # --- Локальные слепки внешних систем (шаг 0) ----------------------------- #
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -96,6 +101,11 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def redis_url(self) -> str:
+        """Адрес хранилища счётчиков и состояния сессии."""
+        return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     def dsn(self, database: str) -> str:
         """Строка подключения к одному из локальных слепков.

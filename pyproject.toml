@@ -37,6 +37,12 @@ pii = [
     "presidio-anonymizer",
 ]
 
+# Ставится на шаге 4 — шлюз к модели: счётчики лимитов и состояние сессии.
+gateway = [
+    "redis",
+    "slowapi",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
