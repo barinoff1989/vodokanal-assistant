@@ -205,8 +205,14 @@ def check_stream(auth: str) -> None:
     """Правило 4.3 требует потока. Проверяем, что он действительно поток."""
     payload = {
         "model": MODEL,
-        "messages": [{"role": "user", "content": "Перечисли пять городов России"}],
-        "max_tokens": 120,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Подробно, не менее чем в десяти предложениях, объясни, "
+                "как абоненту подготовиться к поверке счётчика воды.",
+            }
+        ],
+        "max_tokens": 500,
         "stream": True,
     }
     request = urllib.request.Request(
@@ -232,7 +238,11 @@ def check_stream(auth: str) -> None:
         return
 
     total = time.perf_counter() - started
-    if chunks > 1 and first_at is not None:
+    # Критерий строгий: мало получить больше одного фрагмента — первый обязан
+    # прийти заметно раньше последнего. Иначе провайдер собрал ответ целиком
+    # и лишь потом отдал его частями, а это не поток в смысле правила 4.3.
+    incremental = chunks > 2 and first_at is not None and first_at < total * 0.8
+    if incremental and first_at is not None:
         report(
             "Ответ приходит потоком",
             OK,
