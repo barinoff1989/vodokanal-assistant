@@ -1,0 +1,566 @@
+<title>Верификация водоканал-ассистента</title>
+<style>
+:root{
+  --paper:#F6F8FA; --ink:#1B2733; --ink-soft:#4B5C6B;
+  --accent:#2B5C87; --accent-soft:#E4ECF3; --accent-strong:#1B4468;
+  --line:#D9E2EA; --surface:#FFFFFF;
+  --ok:#1F7A54; --ok-soft:#E4F3EC;
+  --warn:#9A6400; --warn-soft:#FBF0DC;
+  --bad:#B13B3B; --bad-soft:#FBE8E8;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#10161D; --ink:#DDE6EE; --ink-soft:#9AAAB8;
+    --accent:#7EB0DD; --accent-soft:#1C2C3B; --accent-strong:#A8CBEA;
+    --line:#28333F; --surface:#161E27;
+    --ok:#4CC38A; --ok-soft:#16281F;
+    --warn:#E0A83D; --warn-soft:#2B2214;
+    --bad:#E17272; --bad-soft:#2E1A1A;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10161D; --ink:#DDE6EE; --ink-soft:#9AAAB8;
+  --accent:#7EB0DD; --accent-soft:#1C2C3B; --accent-strong:#A8CBEA;
+  --line:#28333F; --surface:#161E27;
+  --ok:#4CC38A; --ok-soft:#16281F;
+  --warn:#E0A83D; --warn-soft:#2B2214;
+  --bad:#E17272; --bad-soft:#2E1A1A;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); line-height:1.55; font-size:16px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:880px; margin:0 auto; padding:0 24px 96px;}
+header.top{
+  padding:44px 0 28px; border-bottom:1px solid var(--line);
+  margin-bottom:36px;
+}
+.eyebrow{
+  font-size:12.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--accent); font-weight:600; margin:0 0 10px;
+}
+h1{
+  font-family:var(--serif); font-weight:400; font-size:2.35rem;
+  margin:0 0 8px; text-wrap:balance; color:var(--ink);
+}
+.subtitle{color:var(--ink-soft); font-size:1.02rem; margin:0; max-width:60ch;}
+.meta-row{
+  display:flex; gap:18px; flex-wrap:wrap; margin-top:18px;
+  font-size:13.5px; color:var(--ink-soft);
+}
+.meta-row b{color:var(--ink); font-weight:600;}
+
+.verdict-band{
+  display:flex; align-items:center; gap:22px;
+  background:var(--warn-soft); border:1px solid var(--warn);
+  border-radius:10px; padding:20px 24px; margin:0 0 40px;
+}
+.verdict-badge{
+  font-family:var(--serif); font-size:1.6rem; font-weight:600;
+  color:var(--warn); white-space:nowrap; letter-spacing:.02em;
+}
+.verdict-text{font-size:14.5px; color:var(--ink); line-height:1.5;}
+.verdict-text b{color:var(--ink);}
+
+section{margin-bottom:52px;}
+h2{
+  font-family:var(--serif); font-weight:400; font-size:1.5rem;
+  margin:0 0 6px; color:var(--ink);
+  display:flex; align-items:baseline; gap:12px;
+}
+.h2-num{color:var(--accent); font-family:var(--mono); font-size:0.95rem; font-weight:600;}
+.lede{color:var(--ink-soft); font-size:14.5px; margin:0 0 22px; max-width:64ch;}
+
+table{width:100%; border-collapse:collapse; font-size:14px;}
+.table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px;}
+th{
+  text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--ink-soft); font-weight:600; padding:12px 14px;
+  background:var(--accent-soft); border-bottom:1px solid var(--line);
+}
+td{padding:13px 14px; border-bottom:1px solid var(--line); vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+td.status{white-space:nowrap; font-weight:600; font-size:13px;}
+.st-ok{color:var(--ok);} .st-warn{color:var(--warn);} .st-bad{color:var(--bad);}
+
+.pill{
+  display:inline-block; padding:2px 9px; border-radius:20px;
+  font-size:11px; font-weight:600; letter-spacing:.02em;
+}
+.pill-ok{background:var(--ok-soft); color:var(--ok);}
+.pill-warn{background:var(--warn-soft); color:var(--warn);}
+.pill-bad{background:var(--bad-soft); color:var(--bad);}
+
+.card{
+  background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--line);
+  border-radius:8px; padding:16px 18px; margin-bottom:14px;
+}
+.card.sev-high{border-left-color:var(--bad);}
+.card.sev-med{border-left-color:var(--warn);}
+.card.sev-low{border-left-color:var(--ink-soft);}
+.card-head{
+  display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  margin-bottom:6px; flex-wrap:wrap;
+}
+.card-title{font-weight:600; font-size:15px;}
+.card-tag{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);}
+.card p{margin:6px 0 0; font-size:14px; color:var(--ink-soft);}
+.card code{font-family:var(--mono); font-size:12.5px; background:var(--accent-soft); padding:1px 5px; border-radius:4px; color:var(--ink);}
+
+.action-list{list-style:none; margin:0; padding:0;}
+.action-list li{
+  display:flex; gap:14px; padding:12px 0; border-bottom:1px solid var(--line);
+}
+.action-list li:last-child{border-bottom:none;}
+.a-badge{
+  flex:0 0 auto; font-family:var(--mono); font-size:11px; font-weight:700;
+  padding:3px 8px; border-radius:5px; height:fit-content;
+}
+.a-p0{background:var(--bad-soft); color:var(--bad);}
+.a-p1{background:var(--warn-soft); color:var(--warn);}
+.a-p2{background:var(--accent-soft); color:var(--accent-strong);}
+.a-body b{display:block; font-size:14.5px; margin-bottom:2px;}
+.a-body span{font-size:13.5px; color:var(--ink-soft);}
+
+.strengths{
+  background:var(--ok-soft); border:1px solid var(--ok); border-radius:10px;
+  padding:18px 22px;
+}
+.strengths h3{margin:0 0 10px; font-size:14px; color:var(--ok); text-transform:uppercase; letter-spacing:.05em;}
+.strengths ul{margin:0; padding-left:20px; font-size:14.5px;}
+.strengths li{margin-bottom:6px;}
+
+.closing{
+  border-top:1px solid var(--line); padding-top:24px; margin-top:52px;
+  color:var(--ink-soft); font-size:13.5px;
+}
+
+.addendum-tag{
+  display:inline-flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:12px; color:var(--accent-strong);
+  background:var(--accent-soft); padding:5px 12px; border-radius:20px;
+  margin-bottom:14px;
+}
+.crit-table td:first-child{font-weight:600; white-space:nowrap;}
+.opt-saas{color:var(--accent-strong); font-weight:600;}
+.opt-self{color:var(--ink); font-weight:600;}
+
+.adr{border:1px solid var(--accent); border-radius:10px; overflow:hidden; margin-top:18px;}
+.adr-head{
+  background:var(--accent); color:#0B1520; padding:14px 20px;
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+}
+.adr-head .adr-id{font-family:var(--mono); font-size:12px; opacity:.75;}
+.adr-head .adr-title{font-family:var(--serif); font-size:1.08rem; font-weight:600;}
+.adr-status{
+  background:rgba(11,21,32,.16); padding:3px 11px; border-radius:20px;
+  font-size:11px; font-weight:700; letter-spacing:.03em; white-space:nowrap;
+}
+.adr-body{display:grid; grid-template-columns:1fr 1fr; background:var(--surface);}
+@media (max-width:640px){.adr-body{grid-template-columns:1fr;}}
+.adr-col{padding:18px 22px;}
+.adr-col + .adr-col{border-left:1px solid var(--line);}
+@media (max-width:640px){.adr-col + .adr-col{border-left:none; border-top:1px solid var(--line);}}
+.adr-col h4{
+  margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--accent-strong);
+}
+.adr-col p, .adr-col ul{margin:0 0 14px; font-size:13.5px; color:var(--ink-soft);}
+.adr-col ul{padding-left:18px;}
+.adr-col li{margin-bottom:4px;}
+.adr-decision{
+  background:var(--accent-soft); border-left:3px solid var(--accent);
+  padding:11px 13px; border-radius:6px; font-size:13.5px; color:var(--ink); margin-bottom:14px;
+}
+.adr-decision b{display:block; margin-bottom:3px; color:var(--accent-strong); font-size:11px; text-transform:uppercase; letter-spacing:.05em;}
+.cons-pos::before{content:"+ "; color:var(--ok); font-weight:700;}
+.cons-neg::before{content:"− "; color:var(--bad); font-weight:700;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">CTO Challenge · Верификация архитектуры</p>
+  <h1>AI-помощник абонента водоканала</h1>
+  <p class="subtitle">Разбор контекста проекта (context_3.md), C4 L2 (контейнеры) и C4 L3 (ETL Worker) по методике Definition of Ready / ATAM / STRIDE.</p>
+  <div class="meta-row">
+    <span><b>Источники:</b> контекст_3.md, C4_L2_mul_ag_1.html, C4_L3_ETL_RAG_1.html</span>
+    <span><b>Этап проекта:</b> RAG MVP (1) → подготовка к агенту (2)</span>
+  </div>
+</header>
+
+<div class="verdict-band">
+  <div class="verdict-badge">CONDITIONAL</div>
+  <div class="verdict-text">
+    «Да, но…» — Этап 1.5 (нормализация таксономии, regex, синтаксис) можно кодить как запланировано.
+    Целевая архитектура Этапа 2 и любые GPU/инфраструктурные траты — <b>не готовы к защите</b>: нет смет CAPEX/OPEX,
+    нет расчётов производительности под заявленные NFR, есть незафиксированные связи в диаграммах.
+  </div>
+</div>
+
+<section>
+  <h2><span class="h2-num">01</span> Definition of Ready</h2>
+  <p class="lede">Обязательный минимум перед тратой бюджета (методика CTO Challenge). Два из четырёх пунктов — стоп-факторы.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Пункт DoR</th><th>Статус</th><th>Комментарий</th></tr>
+    <tr>
+      <td>Проблема понятна (бизнес-цели)</td>
+      <td class="status st-ok">✓ Есть</td>
+      <td>§1–2 контекста: цели и боли абонента сформулированы, роль AI-помощника внятная.</td>
+    </tr>
+    <tr>
+      <td>Решение визуализировано (C4 Context + Container)</td>
+      <td class="status st-warn">⚠ Частично</td>
+      <td>Container (L2) и один Component (L3 ETL) есть. Файла L1 Context среди переданных артефактов нет — проверить, что он существует отдельно.</td>
+    </tr>
+    <tr>
+      <td>Цена посчитана (CAPEX + прогноз OPEX)</td>
+      <td class="status st-bad">✗ Отсутствует</td>
+      <td>Ни одной цифры бюджета во всём документе — при том, что инфраструктура включает K8s, GPU-инференс, self-hosted LLM, Vault/Prometheus/Grafana/Loki. Классический stop-factor «бюджетный разрыв».</td>
+    </tr>
+    <tr>
+      <td>Риски названы (таблица + Mitigation Plan)</td>
+      <td class="status st-ok">✓ Есть</td>
+      <td>§13: 10 рисков с митигацией. Не хватает risk-владельцев/сроков и пунктов Spoofing/IDOR (см. §05).</td>
+    </tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="h2-num">02</span> Верификация vs Валидация</h2>
+  <p class="lede">Инженерный вопрос «соблюдены ли NFR?» и бизнесовый «решает ли это задачу?» — оба пока без расчётной опоры.</p>
+  <div class="card sev-high">
+    <div class="card-head"><span class="card-title">Нет Sizing Calculator под заявленные NFR</span><span class="card-tag">DoD §18</span></div>
+    <p>TTFT &lt; 500 мс, P99 поиска &lt; 100 мс, Recall@3 &gt; 90% — это цели, но нет расчёта по Little's Law
+    (<code>L = λ × W</code>) под целевой RPS, нет разбивки латентности LLM-генерации
+    (<code>T_total = T_prefill + N_tokens × T_per_token</code>) для выбранного GPU/модели (Qwen2.5-32B/72B или GigaChat).
+    Без этого сами цифры NFR — декларация, а не архитектурное решение.</p>
+  </div>
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Валидация бизнес-эффекта не квантифицирована</span><span class="card-tag">§2</span></div>
+    <p>Цели («сократить время поиска ответа», «снизить повторные обращения») сформулированы качественно,
+    но не привязаны к числам — нет базовой линии и целевого % снижения, на которые можно сослаться при защите бюджета.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="h2-num">03</span> Находки по диаграмме C4 L2 (контейнеры)</h2>
+  <p class="lede">C4_L2_mul_ag_1.html — «целевой ландшафт + Inference-сервисы».</p>
+
+  <div class="card sev-high">
+    <div class="card-head"><span class="card-title">Незафиксированная связь Backend → Billing Adapter</span><span class="card-tag">edge e_backend_billingadapter</span></div>
+    <p>У ребра «Данные абонента (read)» задан <code>source="backend"</code>, но атрибут <code>target</code> отсутствует —
+    в draw.io это висящая стрелка, геометрически расположенная у Billing Adapter, но не привязанная к нему как к узлу.
+    На реальной защите это ровно тот случай, когда просят «покажи пальцем на диаграмме, где именно срабатывает связь» — и её там формально нет.</p>
+  </div>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Document Generator — тупиковый узел</span><span class="card-tag">edge e_orch_docgen</span></div>
+    <p>Есть ребро Orchestrator → DocGen («Заполнение/рендер документа»), но нет исходящего ребра от DocGen к Widget/Backend/абоненту.
+    Не показано, как готовый документ доходит до абонента.</p>
+  </div>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Один диапазон нумерации на два разных потока</span><span class="card-tag">edges 1–7c</span></div>
+    <p>Прямой RAG-путь Этапа 1 (Backend→VectorDB=«1», Backend→LLMGateway=«2», LLMGateway→Provider=«3»)
+    и агентный путь Этапа 2 (Backend→Orchestrator=«4», Orchestrator→Backend=«5», …=«7c») пронумерованы одной сквозной серией
+    на одной статичной диаграмме. Читается как единый 7-шаговый вызов, хотя по правилам проекта (§16–17) Этап 2 не должен
+    внедряться до готовности Этапа 1 — это два разных, стадийно разнесённых потока. Стоит разнести на два вида (L2 Этап 1 / L2 Этап 2)
+    либо использовать раздельные серии нумерации.</p>
+  </div>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Session State Store не виден для Этапа 1</span><span class="card-tag">container sessionstore</span></div>
+    <p>Хранилище состояния FSM/аудит-лога связано только с Agent Orchestrator. Но <code>session_id</code> обязателен
+    в metadata API-контракта (§7.1) уже в чистом RAG-режиме Этапа 1, где Orchestrator не участвует. Неясно, где в Этапе 1
+    живёт сессия/аудит/квоты — нужно либо провести ребро Backend↔SessionStore, либо явно описать отдельный, более лёгкий механизм для Этапа 1.</p>
+  </div>
+
+  <div class="card sev-low">
+    <div class="card-head"><span class="card-title">Нет визуального разделения «сейчас» / «целевое»</span><span class="card-tag">whole diagram</span></div>
+    <p>Кроме пометки «[НОВЫЙ]» на Reranker Inference, контейнеры Этапа 1 и Этапа 2 не различаются ни цветом, ни swim-лейном —
+    при первом взгляде не видно, что часть контейнеров ещё не построена.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="h2-num">04</span> Находки по диаграмме C4 L3 (ETL Worker)</h2>
+  <p class="lede">C4_L3_ETL_RAG_1.html — «финальная, целевая модель».</p>
+
+  <div class="card sev-high">
+    <div class="card-head"><span class="card-title">Конкуренция за GPU между batch-ETL и онлайн-retrieval</span><span class="card-tag">Embedding/Reranker Inference</span></div>
+    <p>Одни и те же сервисы <code>Embedding Inference [GPU]</code> и <code>Reranker Inference [GPU]</code> обслуживают
+    и офлайн ETL-пайплайн (шаги 5, 7 на L3), и онлайн-путь Backend-ретривала (эмбеддинг запроса, реранжинг top_k=20→top_n=3 на L2).
+    Ни в одном артефакте нет изоляции GPU, приоритетных очередей или admission control между batch- и интерактивным трафиком.
+    Ночной полный реиндекс базы знаний может насытить GPU и сорвать целевые P99&lt;100мс / TTFT&lt;500мс именно в момент,
+    когда абоненты продолжают пользоваться ботом. Это ровно тот тип вопроса («что будет с латентностью при батч-джобе»),
+    который на защите задают первым.</p>
+  </div>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Диаграмма опережает контекст-документ</span><span class="card-tag">§5.5, §11–12 vs L3</span></div>
+    <p>Пайплайн на диаграмме — Ingest Pipeline (ридер + 3-уровневый классификатор) → Text Splitter → Quality &amp; Dedup Filter (MinHash/SimHash)
+    → офлайн Reranker Client → Embedding Client → Vector DB Client (tombstones + blue-green alias-реиндекс) — заметно богаче,
+    чем описание в контексте (Document Reader → Text Splitter → Metadata Enricher → Embedding Client → Vector DB Client,
+    без dedup, без офлайн-реранкера, без alias-стратегии реиндекса). Диаграмма помечена как целевая — вероятно, она новее,
+    но markdown-источник истины не обновлён. Это тот же класс риска, что и «если не записано — значит, не было».</p>
+  </div>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Кросс-энкодер для дедупликации — нетиповое применение</span><span class="card-tag">reranker node, шаг 4–5</span></div>
+    <p>BGE-reranker-v2-m3 обучен на паре запрос↔документ, а используется для отбора «представительного чанка» из кластера
+    дублей (скоринг «чанк ↔ заголовок раздела»). Это добавляет второй GPU-инференс на каждый прогон ETL для задачи,
+    которую вероятно закрыл бы уже посчитанный <code>quality_score</code> или центроидное сходство — дешевле и без второй GPU-зависимости.
+    Стоит зафиксировать это решение как ADR с explicit trade-off (точность vs. стоимость/латентность индексации).</p>
+  </div>
+
+  <div class="card sev-low">
+    <div class="card-head"><span class="card-title">Хорошие практики, не описанные в контексте</span><span class="card-tag">Sync State, alias-реиндекс</span></div>
+    <p>Курсоры/чек-суммы источников и blue-green переключение alias при реиндексе — зрелые решения, отсутствующие в
+    context_3.md. Стоит перенести их в письменную спецификацию, а не оставлять только на диаграмме.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="h2-num">05</span> STRIDE: то, чего не хватает в реестре рисков</h2>
+  <p class="lede">PII/Tampering закрыт LLM Gateway хорошо. Spoofing и IDOR по цепочке Backend → Billing Adapter / Application Router — нет.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Угроза</th><th>Вопрос челленджера</th><th>Текущее покрытие</th></tr>
+    <tr>
+      <td>Spoofing</td>
+      <td>Доверяет ли Backend/Orchestrator полю <code>subscriber_id</code> из сессии ЛК без повторной проверки на каждом write-шаге?</td>
+      <td class="status st-bad">Не описано</td>
+    </tr>
+    <tr>
+      <td>IDOR</td>
+      <td>Может ли Billing Adapter / Application Router выполнить операцию над данными не того абонента, если <code>subscriber_id</code> подменён на уровне запроса?</td>
+      <td class="status st-bad">Не описано</td>
+    </tr>
+    <tr>
+      <td>Tampering (PII)</td>
+      <td>Уходят ли сырые ПДн в LLM Provider?</td>
+      <td class="status st-ok">Закрыто — LLM Gateway, §4.2</td>
+    </tr>
+    <tr>
+      <td>DoS</td>
+      <td>Что произойдёт при резком всплеске запросов от одного абонента?</td>
+      <td class="status st-ok">Quota Manager (slowapi + Redis), 429 + Retry-After</td>
+    </tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="strengths">
+    <h3>Что уже сделано правильно</h3>
+    <ul>
+      <li>Stage-gating зафиксирован явно: Этап 2 не стартует до метрик Этапа 1 (§16–17) — редкая для первой итерации дисциплина.</li>
+      <li>HITL + идемпотентность + аудит-лог требуются consistently на всех write-путях (Billing, Application Router, документы).</li>
+      <li>PII-барьер архитектурно закреплён на границе LLM Gateway, а не «когда-нибудь потом».</li>
+      <li>Известные дефекты прототипа (таксономия, regex, синтаксис) уже самостоятельно найдены и приоритизированы в §11–12.</li>
+      <li>RFC 7807, URI-версионирование и минимальный API-контракт — хорошая гигиена уровня контракта с первой ревизии.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2><span class="h2-num">06</span> Приоритизированный план действий</h2>
+  <ul class="action-list">
+    <li>
+      <span class="a-badge a-p0">P0</span>
+      <span class="a-body"><b>Смета CAPEX/OPEX</b><span>Даже грубый Sizing Calculator (K8s, GPU-инференс, managed DB, лицензии/токены LLM) — без него бюджет не защищается по определению DoR.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p0">P0</span>
+      <span class="a-body"><b>Расчёт производительности под целевые NFR</b><span>Little's Law + разбивка LLM-латентности для выбранного железа/модели — обосновать TTFT&lt;500мс и P99&lt;100мс цифрами, не декларацией.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p0">P0</span>
+      <span class="a-body"><b>Исправить связи на L2</b><span>Привязать ребро Backend→Billing Adapter к целевому узлу; продлить путь DocGen → доставка абоненту.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p0">P0</span>
+      <span class="a-body"><b>План изоляции GPU между ETL и онлайн-retrieval</b><span>Приоритетные очереди, отдельный пул или окно обслуживания для полного реиндекса — иначе ночной ETL рискует SLA живых пользователей.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p1">P1</span>
+      <span class="a-body"><b>Оформить 3–5 ADR</b><span>Платформа оркестрации, триггер миграции transitions→LangGraph, триггер self-host LLM, trade-off офлайн-реранкера для дедупликации.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p1">P1</span>
+      <span class="a-body"><b>Sequence-диаграмма для двух критических сценариев</b><span>Stage-1 streaming RAG и Stage-2 confirm/write-флоу — отдельные Mermaid/PlantUML артефакты, не только текст в §6.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p1">P1</span>
+      <span class="a-body"><b>Синхронизировать §5.5/§11 с L3-диаграммой</b><span>Добавить Dedup Filter, офлайн Reranker, Sync State, blue-green реиндекс в письменную спецификацию.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p1">P1</span>
+      <span class="a-body"><b>Добавить Spoofing/IDOR в реестр рисков</b><span>Явно описать проверку subscriber_id на каждом write-шаге Billing Adapter / Application Router.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p1">P1</span>
+      <span class="a-body"><b>Разнести нумерацию/виды L2-диаграммы</b><span>Отдельные виды или серии нумерации для потока Этапа 1 и целевого потока Этапа 2.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p2">P2</span>
+      <span class="a-body"><b>Подтвердить наличие L1 Context-диаграммы</b><span>Как отдельный файл рядом с L2/L3, а не только упоминание в тексте.</span></span>
+    </li>
+    <li>
+      <span class="a-badge a-p2">P2</span>
+      <span class="a-body"><b>Визуально пометить контейнеры по этапам</b><span>Цвет/swim-лейн «Этап 1» vs «Этап 2 (целевое)» на L2, а не только тег «[НОВЫЙ]».</span></span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <span class="addendum-tag">⤷ Дополнение · Trade-off Analysis</span>
+  <h2><span class="h2-num">07</span> Дилемма: SaaS (GPT-класс) vs Self-hosted (Llama 3)</h2>
+  <p class="lede">По методике слайда «Trade-offs» из урока 9 (LLM Model Strategy) и статье a16z
+  «Navigating the High Cost of AI Compute». Разобрано по пяти критериям и по этапам дорожной карты проекта (§17 контекста).</p>
+
+  <div class="card sev-med">
+    <div class="card-head"><span class="card-title">Важная поправка к формулировке дилеммы</span><span class="card-tag">152-ФЗ</span></div>
+    <p>GPT-5 как SaaS-вариант в этом проекте — вероятно, юридически недоступен: субъект — абонент российского
+    водоканала, ПДн (ФИО, лицевой счёт, адрес) при обращении к OpenAI (США) означают трансграничную передачу ПДн
+    без надёжной правовой основы по 152-ФЗ. Это ровно причина, по которой context.md §5.1/§8.1 уже выбрал в
+    качестве SaaS-провайдера <b>GigaChat Pro / YandexGPT</b>, а не GPT-4/5. Ниже сравнение сохраняет общую логику
+    «SaaS vs Self-hosted» из задания, но как SaaS-кандидат рассматривается класс «управляемый API отечественного
+    провайдера», а не конкретно GPT-5.</p>
+  </div>
+
+  <div class="table-wrap">
+  <table class="crit-table">
+    <tr><th>Критерий</th><th><span class="opt-saas">SaaS</span> (GigaChat Pro / YandexGPT-класс)</th><th><span class="opt-self">Self-hosted</span> (Qwen2.5-32B/72B, резерв Llama 3.1)</th></tr>
+    <tr>
+      <td>Стоимость</td>
+      <td>OPEX = цена за токен, без CAPEX. a16z: розничная цена SaaS обычно включает наценку над «сырой» стоимостью
+      компьютинга (для GPT-3-класса инференса — сырая цена ≈$0.0002–0.0014 за 1000 токенов против розничных
+      ≈$0.002) — часть этой наценки при самохостинге теоретически можно забрать себе, но взамен появляется
+      фиксированный CAPEX на GPU и его простой в непиковые часы. Компании до $50M ARR по данным a16z
+      успешно оставались на управляемых API, не переходя на self-host.</td>
+      <td>CAPEX на GPU-сервер + постоянный OPEX инфраструктуры вне зависимости от факта использования.
+      Окупается только при стабильно высоком объёме — в этом проекте порог уже зафиксирован в §8.1:
+      &gt;50M токенов/мес. a16z предупреждает: цена A100 on-demand различается почти в 4× между провайдерами —
+      считать CAPEX по одной цифре из прайс-листа нельзя.</td>
+    </tr>
+    <tr>
+      <td>Приватность данных</td>
+      <td>Данные абонента покидают периметр компании (идут во внешний API). Требует PII-фильтрации <i>до</i>
+      отправки (LLM Gateway, правило §4.2) — это единственный компенсирующий контроль.</td>
+      <td>Данные не покидают периметр — снимает необходимость доверять внешнему провайдеру и упрощает
+      аргументацию перед ИБ/152-ФЗ. Именно этот критерий в §8.1 назван первым триггером перехода на self-host
+      («запрет ИБ на внешние API»).</td>
+    </tr>
+    <tr>
+      <td>Качество ответов</td>
+      <td>Топовые SaaS-модели обычно сильнее на сложных рассуждениях и меньше требуют prompt-инженерии —
+      быстрее выйти на приемлемый Recall@3&gt;90% (DoD §18) без A/B-цикла.</td>
+      <td>Open-weight модели среднего размера (32–72B) обычно уступают топовым SaaS в сложных кейсах
+      (лекция: «Llama-70b уступает GPT-4 в сложных рассуждениях»). Для узкой предметной области (регламенты
+      водоканала) разрыв можно частично закрыть RAG + Golden Set +, при необходимости, LoRA-дообучением (§8.1) —
+      но это дополнительный этап работы, а не выигрыш «из коробки».</td>
+    </tr>
+    <tr>
+      <td>Latency</td>
+      <td>Сетевой хоп до внешнего API добавляет задержку и зависит от провайдера; TTFT&lt;500мс (DoD) достижим,
+      но не полностью в руках команды — при инцидентах у провайдера единственная защита — fallback/circuit
+      breaker в LLM Gateway.</td>
+      <td>При грамотном sizing латентность полностью контролируется командой — единственный способ добиться
+      триггера «latency&lt;200мс» из §8.1. Но это требует расчёта по Little's Law и LLM-latency формуле
+      (<code>T_total=T_prefill+N_tokens×T_per_token</code>) под конкретную GPU — без него можно получить
+      обратный эффект (см. §02 находки этого отчёта).</td>
+    </tr>
+    <tr>
+      <td>Сложность поддержки</td>
+      <td>Низкая: нет GPU-парка, нет ответственности за аптайм модели, апгрейды версий — на стороне провайдера.
+      Основная нагрузка — на LLM Gateway (квоты, PII, ретраи).</td>
+      <td>Высокая: нужен GPU node affinity, мониторинг модели, план обновления весов, бэкапы/DR для инференс-сервиса,
+      обученная DevOps-экспертиза. a16z: софт-оптимизации (квантование, pruning, mixed precision) дают до 10×
+      выигрыша в рантайме, но это отдельная инженерная работа, которую придётся делать самим или заказывать.</td>
+    </tr>
+  </table>
+  </div>
+
+  <h2 style="margin-top:40px;"><span class="h2-num">07.1</span> По этапам дорожной карты</h2>
+  <p class="lede">Триггеры перехода уже зафиксированы в context.md §8.1 — таблица привязывает их к конкретным этапам вместо общего «когда-нибудь».</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Этап</th><th>Рекомендация</th><th>Почему</th></tr>
+    <tr>
+      <td>Этап 1 — RAG MVP</td>
+      <td class="status st-ok">SaaS по умолчанию</td>
+      <td>PoC/PMF-логика a16z: нет смысла нести CAPEX GPU до подтверждения ценности продукта. Объём токенов
+      заведомо ниже порога 50M/мес. Через LLM Gateway (LiteLLM) — не завязываться на провайдера в коде.</td>
+    </tr>
+    <tr>
+      <td>Этап 1.5 — Качество RAG</td>
+      <td class="status st-ok">SaaS + пилотный A/B self-hosted</td>
+      <td>Golden Set (§8.1) — момент честно сравнить Qwen2.5-32B против GigaChat/YandexGPT на реальных данных,
+      не гадая. Замерить фактический token/мес и P95-латенцию для проверки триггеров.</td>
+    </tr>
+    <tr>
+      <td>Этап 2 — Agent MVP</td>
+      <td class="status st-warn">Гибрид через LLM Gateway</td>
+      <td>Write-путям (биллинг, заявки) — модель с максимальной надёжностью, вероятно ещё SaaS с fallback.
+      Для отдельных высокочастотных inquiry_type, где триггер по объёму уже сработал — пилот self-hosted.</td>
+    </tr>
+    <tr>
+      <td>Этап 3 — Масштабирование</td>
+      <td class="status st-bad">Self-hosted основной</td>
+      <td>Если триггеры §8.1 подтвердились (объём, ИБ, latency, дообучение) — переезд на Qwen2.5-72B/Llama 3.1.
+      Держать в уме предупреждение a16z: не брать A100 по умолчанию — для латентность-нечувствительных нагрузок
+      A10/A40 дают 3–4× экономию; квантование — ещё кратный выигрыш.</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="adr">
+    <div class="adr-head">
+      <div><div class="adr-id">ADR-002</div><div class="adr-title">Стратегия хостинга LLM: поэтапный переход SaaS → Self-hosted</div></div>
+      <span class="adr-status">PROPOSED (DRAFT)</span>
+    </div>
+    <div class="adr-body">
+      <div class="adr-col">
+        <h4>Context</h4>
+        <p>Объём обращений на старте неизвестен, CAPEX на GPU не заложен в смету (её пока нет вовсе, см. §01),
+        а требования ИБ/152-ФЗ ограничивают выбор SaaS-провайдера рынком РФ.</p>
+        <h4>Alternatives Considered</h4>
+        <ul>
+          <li>Только SaaS весь проект — просто, но не закрывает будущие триггеры (объём, latency, дообучение).</li>
+          <li>Только self-hosted с Этапа 1 — CAPEX и DevOps-нагрузка до подтверждения спроса, риск сорвать 53-дневный/аналогичный дедлайн MVP.</li>
+          <li><b>Гибрид через LLM Gateway с миграцией по триггерам §8.1 — выбрано.</b></li>
+        </ul>
+      </div>
+      <div class="adr-col">
+        <div class="adr-decision"><b>Decision</b>LLM Gateway (LiteLLM) — единая точка абстракции с Этапа 1.
+        По умолчанию — SaaS (GigaChat Pro/YandexGPT). Переход на self-hosted (Qwen2.5-32B/72B) — поэтапно,
+        по мере фактического срабатывания триггеров §8.1, без изменения кода приложений (только config.yaml).</div>
+        <h4>Consequences</h4>
+        <ul>
+          <li class="cons-pos">Нулевой CAPEX GPU на старте, быстрый time-to-market Этапа 1.</li>
+          <li class="cons-pos">A/B SaaS vs self-hosted на Golden Set — без переписывания Backend/Orchestrator.</li>
+          <li class="cons-neg">Если триггер (например, запрет ИБ) сработает резко, а не постепенно — нужен «разогретый» staging self-hosted контур заранее, иначе миграция сорвёт SLA.</li>
+          <li class="cons-neg">GPU-инференс (embedding/reranker) уже self-hosted с Этапа 1 (см. §04) — часть DevOps-сложности self-host уже присутствует независимо от выбора LLM-провайдера.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="closing">
+  Методология: Definition of Ready · Verification/Validation matrix · ATAM Utility Tree · STRIDE · Little's Law sizing ·
+  Trade-off Analysis — по материалам курса «Верификация архитектуры: CTO Challenge» и статьи a16z
+  «Navigating the High Cost of AI Compute». Вердикт применён к проекту «AI-помощник абонента водоканала»,
+  не к иллюстративному кейсу курса.
+</div>
+
+</div>
