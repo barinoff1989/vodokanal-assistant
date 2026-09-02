@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.gateway.guardrails import SAFE_FALLBACK, SyncGuardrails
-from app.gateway.llm_gateway import LlmGateway, ProviderTimeoutError
+from app.gateway.llm_gateway import DirectAnswer, LlmGateway, ProviderTimeoutError
 from app.gateway.pii_filter import PiiSanitizer
 from app.gateway.quota import QuotaManager
 from app.models import (
@@ -449,3 +449,112 @@ def test_интерфейс_прогревает_шлюз_при_запуске(
         pass
 
     assert warmed == ["да"], "приложение не прогрело шлюз при запуске"
+
+
+# --- прямой ответ мимо модели (ADR-012, ADR-013) -------------------------------- #
+#
+# Два случая обходят генерацию по противоположным причинам: график отключений
+# меняется постоянно и требует точности, утверждённая формулировка о качестве
+# воды не меняется вовсе. Шлюз про них ничего не знает — он знает только, что у
+# него может быть прямой ответчик.
+
+
+class _AlwaysAnswers:
+    """Отвечает на всё. Подменяет предметный ответчик — шлюзу всё равно, какой."""
+
+    def __init__(self, text: str = "готовый ответ", disclaimer: str | None = "оговорка"):
+        self._answer = DirectAnswer(text=text, disclaimer=disclaimer)
+
+    def answer(self, request, *, now):  # noqa: ARG002 — форма протокола
+        return self._answer
+
+
+class _NeverAnswers:
+    """Всегда «не мой случай»."""
+
+    def answer(self, request, *, now):  # noqa: ARG002 — форма протокола
+        return None
+
+
+async def _explode(*args, **kwargs):
+    raise AssertionError("провайдер вызван, хотя ответ был готов без него")
+
+
+async def test_прямой_ответ_не_вызывает_провайдера_в_потоке():
+    """Главное требование ADR-013: ответ не стоит ни токенов, ни ожидания.
+
+    Проверяется не результатом, а тем, что вызов модели не состоялся, — по
+    образцу теста порядка quota-first. Иначе экономия осталась бы заявлением.
+    """
+    gateway = _gateway(completion=_explode, direct=_AlwaysAnswers())
+    events = [event async for event in gateway.stream(_request())]
+
+    assert any(isinstance(e, TokenEvent) and e.delta == "готовый ответ" for e in events)
+    assert not any(isinstance(e, ErrorEvent) for e in events)
+
+
+async def test_прямой_ответ_не_вызывает_провайдера_в_ответе_целиком():
+    gateway = _gateway(completion=_explode, direct=_AlwaysAnswers())
+    response = await gateway.generate(_request())
+
+    assert isinstance(response, GenerateResponse)
+    assert response.answer == "готовый ответ"
+
+
+async def test_оговорка_доходит_до_абонента_обоими_путями():
+    """Отметка актуальности бесполезна, если теряется в одном из режимов.
+
+    Проект уже платил за это: фактически ответившая модель была видна только в
+    ответе целиком, пока поле не добавили и в поток (раздел 54.3).
+    """
+    gateway = _gateway(completion=_explode, direct=_AlwaysAnswers())
+
+    response = await gateway.generate(_request())
+    assert isinstance(response, GenerateResponse)
+    assert response.disclaimer == "оговорка"
+
+    events = [event async for event in gateway.stream(_request())]
+    metadata = [e for e in events if isinstance(e, MetadataEvent)]
+    assert metadata and metadata[0].disclaimer == "оговорка"
+
+
+async def test_путь_ответа_виден_в_маршрутизации():
+    """Иначе прямой ответ неотличим от сгенерированного при разборе жалобы."""
+    gateway = _gateway(completion=_explode, direct=_AlwaysAnswers())
+
+    response = await gateway.generate(_request())
+    assert isinstance(response, GenerateResponse)
+    assert response.routing.get("path") == "direct"
+
+    events = [event async for event in gateway.stream(_request())]
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert done and done[0].routing.get("path") == "direct"
+
+
+async def test_молчание_ответчика_уводит_на_обычный_путь():
+    """«Не мой случай» не должно превращаться в отказ."""
+    gateway = _gateway(direct=_NeverAnswers())
+    response = await gateway.generate(_request())
+
+    assert isinstance(response, GenerateResponse)
+    assert response.answer
+    assert response.routing.get("path") != "direct"
+
+
+async def test_лимиты_проверяются_и_на_прямом_пути():
+    """Порядок quota-first не меняется (раздел 41.3).
+
+    Иначе появился бы путь в обход лимитов, которым можно давить сервис
+    бесплатно для нападающего: ответ без модели ничего не стоит нам, но
+    обработка запроса стоит.
+    """
+    gateway = _gateway(
+        quota=QuotaManager(FakeRedis(), subscriber_limit=1, session_limit=1, service_limit=1),
+        completion=_explode,
+        direct=_AlwaysAnswers(),
+    )
+    await gateway.generate(_request())
+    response = await gateway.generate(_request())
+
+    assert isinstance(response, ProblemDetail)
+    assert response.status == 429

@@ -524,6 +524,17 @@ components:
           - $ref: '#/components/schemas/InquiryType'
           - type: 'null'
           default: null
+        topic:
+          anyOf:
+          - $ref: '#/components/schemas/Topic'
+          - type: 'null'
+          default: null
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Address
       required:
       - subscriber_id
       - session_id
@@ -592,6 +603,26 @@ components:
       - delta
       title: TokenEvent
       type: object
+    Topic:
+      description: 'О чём спрашивает абонент (ADR-011, тематическая ось).
+
+
+        Определяет **путь ответа**, а не место регистрации. Состав растёт на
+
+        код-шаге 5 из состава базы знаний; сейчас здесь только те темы, для которых
+
+        путь ответа уже решён.
+
+
+        Значения намеренно не пересекаются со значениями :class:`InquiryType` —
+
+        сравнение осей между собой вернуло бы дефект 11.1 в новом виде.'
+      enum:
+      - general
+      - outage
+      - water_quality
+      title: Topic
+      type: string
     Usage:
       additionalProperties: false
       properties:

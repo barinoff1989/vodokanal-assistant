@@ -37,7 +37,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.taxonomy import InquiryType
+from app.taxonomy import InquiryType, Topic
 
 __all__ = [
     "AuditEntry",
@@ -147,6 +147,21 @@ class RequestMetadata(BaseModel):
     inquiry_type: InquiryType | None = None
     """Может отсутствовать до классификации — на самом первом обращении
     абонента типа ещё нет."""
+
+    topic: Topic | None = None
+    """Тематическая ось (ADR-011): о чём вопрос, а не во что регистрировать.
+
+    Определяет путь ответа. `outage` уводит на точный поиск по графику
+    отключений, `water_quality` — на утверждённую формулировку; оба минуют
+    модель. Отсутствует до классификации, как и `inquiry_type`."""
+
+    address: str | None = None
+    """Адрес абонента из профиля личного кабинета.
+
+    Не из текста вопроса: ЛК адрес знает, а извлечение из текста — лишний шаг с
+    потерями. Нужен там, где ответ зависит от места, — сейчас это график
+    отключений. Приходит строкой в том виде, в каком его ведёт ЛК
+    («г. Тестовый, ул. Набережная, д. 65, кв. 156»)."""
 
     @field_validator("inquiry_type", mode="before")
     @classmethod
