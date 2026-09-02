@@ -1,0 +1,308 @@
+"""Разбор графика плановых отключений из файла.
+
+Источник приходит **файлом**, у которого нет ни схемы, ни версии: его готовит
+человек. На MVP файл заменится онлайн-доступом к БД, где лежат все адреса,
+атрибут отключения и типизированное время (ADR-013), — и тогда этот модуль
+заменится целиком, а всё, что за ним, останется.
+
+Поэтому разбор — **отдельный шаг приёма, а не часть пути ответа**. Сломался
+формат — видна ошибка приёма и старая отметка актуальности, а не неверный ответ
+абоненту.
+
+ЧТО ИМЕННО ПРИХОДИТСЯ ПЕРЕЖИВАТЬ. Всё перечисленное измерено на образце (6
+районов, 20 периодов, 1827 адресов), а не предположено:
+
+* **тип улицы записан четырьмя способами** — префикс «ул.» (108 строк), без типа
+  вовсе (40), постфикс «Победы б-р, 2,4,6» (18) и двойной «ул. пер. Цимлянский»,
+  «ул. Ленинский пр.» (13);
+* **года нет нигде** — он передаётся снаружи;
+* **14 формулировок периода на 20 периодов**: «по» и «до» вперемешку, составной
+  «с 28 июля по 10 августа **и** с 24 по 28 августа», и один с концом раньше
+  начала — «с 28 июля по 10 июля»;
+* **окончания строк**: 106 «;», 40 «.», 34 ничем; висячие запятые, «;» внутри
+  списка домов, пробел перед запятой.
+
+ЛОВУШКА, ПРОВЕРЕННАЯ НА СЕБЕ. Улица **«Набережная»** носит название,
+совпадающее со словом-типом. Первый проход разбора этого файла снял «набережная»
+как тип и получил пустое имя — то есть уничтожил улицу. Отсюда правило
+:func:`normalize_street`: **последний оставшийся токен не снимается никогда**.
+
+ОШИБКИ НЕ ГЛОТАЮТСЯ. Разбор возвращает не только записи, но и :class:`Problem` —
+всё, что выглядит неправильно: перевёрнутый период, строка без домов,
+неразобранная дата. Молча пропустить строку означало бы тихо потерять адреса, а
+абонент узнал бы об этом, придя за водой.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass, field
+from datetime import date
+
+__all__ = [
+    "MONTHS",
+    "STREET_TYPES",
+    "Outage",
+    "ParseResult",
+    "Problem",
+    "normalize_house",
+    "normalize_street",
+    "parse_period",
+    "parse_schedule",
+    "spelling_collisions",
+]
+
+
+MONTHS: dict[str, int] = {
+    "января": 1, "февраля": 2, "марта": 3, "апреля": 4, "мая": 5, "июня": 6,
+    "июля": 7, "августа": 8, "сентября": 9, "октября": 10, "ноября": 11,
+    "декабря": 12,
+}
+"""Родительный падеж: в графике месяц стоит только так («с 3 по 6 августа»)."""
+
+STREET_TYPES: tuple[str, ...] = (
+    "улица", "ул", "переулок", "пер", "проспект", "пр-т", "пр-кт", "пр",
+    "бульвар", "б-р", "набережная", "наб", "шоссе", "проезд", "площадь", "пл",
+    "спорт", "спор",
+)
+"""Слова-типы, снимаемые при нормализации.
+
+«Набережная» здесь есть намеренно — она встречается и как тип («Наб.
+Авиастроителей»), и как название («Набережная, 1, 1а/1»). Различает их не
+словарь, а правило «снимать, только если что-то останется»."""
+
+_DISTRICT_RE = re.compile(r"^(?P<name>[^,]+?)\s+район$", re.IGNORECASE)
+_PERIOD_RE = re.compile(
+    r"с\s+(?P<d1>\d{1,2})(?:\s+(?P<m1>[а-яё]+))?\s+(?:по|до)\s+(?P<d2>\d{1,2})\s+(?P<m2>[а-яё]+)",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Outage:
+    """Одно отключение по одному адресу.
+
+    Форма записи повторяет **будущую БД**, а не файл: адрес, признак отключения
+    (сам факт наличия записи) и интервал. Файл сгруппирован по периодам —
+    «период → список улиц», — и хранить его так значило бы переписывать всё
+    вслед за источником при переходе на MVP (ADR-013).
+    """
+
+    district: str
+    street: str
+    """Нормализованное название — по нему ищут."""
+    house: str
+    """Нормализованный номер дома."""
+    starts_on: date
+    ends_on: date
+    street_raw: str
+    """Как записано в источнике. Хранится, чтобы расхождение можно было
+    предъявить владельцу, а не пересказать."""
+    house_raw: str
+
+
+@dataclass(frozen=True, slots=True)
+class Problem:
+    """Что в источнике выглядит неправильно.
+
+    Не исключение: одна кривая строка не должна ронять разбор всего файла. Но и
+    не молчание — проблемы возвращаются наверх и попадают в отчёт приёма.
+    """
+
+    line_number: int
+    kind: str
+    detail: str
+
+
+@dataclass
+class ParseResult:
+    outages: list[Outage] = field(default_factory=list)
+    problems: list[Problem] = field(default_factory=list)
+
+    @property
+    def districts(self) -> set[str]:
+        return {o.district for o in self.outages}
+
+
+def normalize_street(raw: str) -> str:
+    """Привести название улицы к виду, по которому можно искать.
+
+    Слова-типы снимаются **с краёв**: в источнике они стоят и спереди («ул.
+    Димитрова»), и сзади («Победы б-р»), и дважды подряд («ул. пер. Цимлянский»,
+    «ул. Наб. Авиастроителей»).
+
+    **Последний оставшийся токен не снимается никогда.** Без этого правила
+    улица «Набережная» превращается в пустую строку: её название совпадает со
+    словом-типом. Первый проход разбора этого файла так и сделал — уничтожил
+    улицу целиком.
+
+    Цена правила видна на «Спор. Набережная» и «Спорт Набережная»: оба написания
+    сводятся к «набережная», то есть к тому же названию, что у отдельной улицы
+    Набережная в другом районе. Это осознанный выбор: **несогласованная
+    нормализация хуже слияния** — улица, не совпадающая сама с собой, не
+    находится вовсе, а слияние видно при сверке `street_raw` и разводится
+    районом. Пары «разное написание — одно название» перечисляет
+    :func:`spelling_collisions`.
+    """
+    value = raw.strip().strip(",;.").replace("ё", "е").replace("Ё", "Е")
+    value = value.replace(".", " ").replace("—", "-")
+    value = re.sub(r"\s*-\s*", "-", value)
+    tokens = [t for t in re.split(r"\s+", value.lower()) if t.strip(" ,-")]
+
+    while len(tokens) > 1 and tokens[0] in STREET_TYPES:
+        tokens.pop(0)
+    while len(tokens) > 1 and tokens[-1] in STREET_TYPES:
+        tokens.pop()
+
+    return " ".join(tokens).strip(" ,-")
+
+
+def spelling_collisions(outages: Iterable[Outage]) -> dict[str, set[str]]:
+    """Названия, к которым свелось больше одного написания источника.
+
+    Не ошибка сама по себе — «ул. Димитрова» и «Димитрова» обязаны сойтись, —
+    но место, где слияние стоит проверить глазами: сюда же попадут «Спор.
+    Набережная» и «Набережная», если они окажутся разными улицами.
+    """
+    seen: dict[str, set[str]] = {}
+    for outage in outages:
+        seen.setdefault(outage.street, set()).add(outage.street_raw)
+    return {street: raws for street, raws in seen.items() if len(raws) > 1}
+
+
+def normalize_house(raw: str) -> str:
+    """Привести номер дома к сравнимому виду.
+
+    Пробелы внутри убираются («10 а» и «10а» — один дом), точки тоже: в номере
+    они означают только сокращение («1а к.1» и «251к1» — одна форма записи,
+    «42 (общ.)» и «42 (общ)» — тоже). Регистр снимается, «ё» заменяется.
+
+    Скобочные пометки **сохраняются**: «42 (общ.)» — общежитие, отдельное
+    строение, а не украшение записи.
+    """
+    cleaned = raw.strip().strip(",;. ").replace("ё", "е").replace(".", "")
+    return re.sub(r"\s+", "", cleaned).lower()
+
+
+def parse_period(text: str, year: int) -> tuple[list[tuple[date, date]], str | None]:
+    """Разобрать строку периода. Возвращает интервалы и описание проблемы.
+
+    Обрабатывает всё, что встретилось в образце:
+
+    * «с 3 по 6 августа» — месяц указан один раз, относится к обеим датам;
+    * «с 28 июля по 13 августа» — месяцы разные;
+    * «с 17 до 21 августа» — «до» наравне с «по»;
+    * «с 28 июля по 10 августа и с 24 по 28 августа» — два интервала в строке;
+    * «с 28 декабря по 10 января» — переход через год.
+
+    :param year: год, которого в источнике нет. На прототипе — год приёма файла;
+        на MVP вопрос не возникает, время приходит из БД типизированным.
+    """
+    intervals: list[tuple[date, date]] = []
+    inverted: list[str] = []
+
+    for chunk in re.split(r"\s+и\s+", text):
+        match = _PERIOD_RE.search(chunk)
+        if match is None:
+            continue
+        month_to = MONTHS.get(match.group("m2").lower())
+        if month_to is None:
+            continue
+        month_from = MONTHS.get((match.group("m1") or "").lower(), month_to)
+
+        start = date(year, month_from, int(match.group("d1")))
+        end_year = year + 1 if month_to < month_from else year
+        end = date(end_year, month_to, int(match.group("d2")))
+
+        if end < start:
+            # «с 28 июля по 10 июля» — в образце такое есть. Не исправляем
+            # молча: перевёрнутый интервал не совпадёт ни с одной датой, и
+            # адреса просто исчезли бы из ответов без единого следа.
+            inverted.append(f"{start.isoformat()}..{end.isoformat()}")
+            continue
+        intervals.append((start, end))
+
+    if inverted:
+        return intervals, "конец периода раньше начала: " + ", ".join(inverted)
+    if not intervals:
+        return intervals, "период не разобран"
+    return intervals, None
+
+
+def _split_houses(text: str) -> Iterator[str]:
+    """Разделить перечень домов.
+
+    Разделителем считаются и запятая, и точка с запятой: в образце «;» стоит
+    внутри списка домов четыре раза («ул. Мопра, 2а, 3, 8б; 19/1, 75»), хотя по
+    смыслу разделяет улицы. Висячие запятые дают пустые куски — они отбрасываются.
+    """
+    for piece in re.split(r"[,;]", text):
+        cleaned = piece.strip(" .;,\t")
+        if cleaned:
+            yield cleaned
+
+
+def parse_schedule(lines: Iterable[str], *, year: int) -> ParseResult:
+    """Разобрать график целиком.
+
+    Структура источника: заголовок района, затем период, затем строки улиц с
+    домами. Период действует до следующего периода, район — до следующего
+    района.
+    """
+    result = ParseResult()
+    district: str | None = None
+    intervals: list[tuple[date, date]] = []
+
+    for number, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        district_match = _DISTRICT_RE.match(line)
+        if district_match is not None:
+            district = district_match.group("name").strip()
+            intervals = []
+            continue
+
+        if re.match(r"^с\s+\d", line, re.IGNORECASE):
+            intervals, problem = parse_period(line, year)
+            if problem is not None:
+                result.problems.append(Problem(number, "период", f"{problem}: {line!r}"))
+            continue
+
+        if district is None:
+            result.problems.append(Problem(number, "нет района", f"строка вне района: {line!r}"))
+            continue
+        if not intervals:
+            result.problems.append(Problem(number, "нет периода", f"строка вне периода: {line!r}"))
+            continue
+
+        street_raw, _, houses_raw = line.partition(",")
+        if not houses_raw.strip():
+            result.problems.append(Problem(number, "нет домов", f"улица без домов: {line!r}"))
+            continue
+
+        street = normalize_street(street_raw)
+        if not street:
+            result.problems.append(Problem(number, "пустая улица", f"{street_raw!r}"))
+            continue
+
+        for house_raw in _split_houses(houses_raw):
+            house = normalize_house(house_raw)
+            if not house:
+                continue
+            for starts_on, ends_on in intervals:
+                result.outages.append(
+                    Outage(
+                        district=district,
+                        street=street,
+                        house=house,
+                        starts_on=starts_on,
+                        ends_on=ends_on,
+                        street_raw=street_raw.strip(),
+                        house_raw=house_raw,
+                    )
+                )
+
+    return result
