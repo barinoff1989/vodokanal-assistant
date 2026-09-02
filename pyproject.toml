@@ -43,6 +43,18 @@ gateway = [
     "slowapi",
 ]
 
+# Ставится на шаге 8 — HTTP-интерфейс и демо-стенд.
+api = [
+    "fastapi",
+    "uvicorn",
+    "sse-starlette",
+]
+
+# Ставится на шаге 10 — наблюдаемость.
+observability = [
+    "prometheus-client",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -41,6 +42,7 @@ from app.config import Settings, get_settings
 from app.gateway.guardrails import StreamGuard, SyncGuardrails
 from app.gateway.pii_filter import PiiSanitizer
 from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
+from app.metrics import prometheus as metrics
 from app.models import (
     DoneEvent,
     ErrorEvent,
@@ -180,6 +182,8 @@ class LlmGateway:
                     entities=sorted(set(report.entities) | set(chunk_report.entities)),
                 )
 
+        metrics.record_pii(report.entities)
+
         content = clean_query
         if pieces:
             content = "Контекст:\n" + "\n\n".join(pieces) + "\n\nВопрос: " + clean_query
@@ -312,14 +316,23 @@ class LlmGateway:
 
         answer = _extract_text(raw)
         verdict = self._guardrails.check(answer)
+        metrics.record_guardrail(
+            blocked=not verdict.allowed,
+            reason=verdict.reason.value if verdict.reason else None,
+        )
         if not verdict.allowed:
             answer = verdict.text_for_subscriber or ""
+
+        usage = _extract_usage(raw)
+        metrics.record_tokens(
+            prompt=usage.prompt_tokens, completion=usage.completion_tokens
+        )
 
         return GenerateResponse(
             answer=answer,
             model=self._settings.llm_provider,
             finish_reason=verdict.finish_reason or FinishReason.STOP,
-            usage=_extract_usage(raw),
+            usage=usage,
             sources=self._sources(request),
             pii_report=report,
             routing={"provider": self._settings.llm_provider},
@@ -336,8 +349,16 @@ class LlmGateway:
         событие ошибки с тем же телом RFC 7807, что и у обычного ответа.
         """
         trace_id = self.new_trace_id()
+        started = time.perf_counter()
+        channel = request.metadata.channel.value
+        inquiry_type = (
+            request.metadata.inquiry_type.value if request.metadata.inquiry_type else None
+        )
 
         if (problem := self._check_quota(request, trace_id)) is not None:
+            metrics.record_response(
+                channel=channel, inquiry_type=inquiry_type, outcome="error"
+            )
             yield ErrorEvent(problem=problem)
             return
 
@@ -347,6 +368,9 @@ class LlmGateway:
             raw_stream = await self._call(request, messages, stream=True)
         except ProviderTimeoutError as exc:
             logger.warning("провайдер не ответил вовремя: %s | %s", exc, trace_id)
+            metrics.record_response(
+                channel=channel, inquiry_type=inquiry_type, outcome="error"
+            )
             yield ErrorEvent(
                 problem=self.problem(
                     "upstream-timeout", "LLM provider timeout", 504, trace_id,
@@ -356,6 +380,9 @@ class LlmGateway:
             return
         except Exception as exc:  # noqa: BLE001
             logger.warning("провайдер ответил ошибкой: %s | %s", exc, trace_id)
+            metrics.record_response(
+                channel=channel, inquiry_type=inquiry_type, outcome="error"
+            )
             yield ErrorEvent(
                 problem=self.problem(
                     "upstream-unavailable", "LLM provider unavailable", 502, trace_id,
@@ -366,11 +393,14 @@ class LlmGateway:
 
         guard = StreamGuard(guardrails=self._guardrails)
         blocked = False
+        first_delta_at: float | None = None
 
         async for piece in raw_stream:
             delta = _extract_delta(piece)
             if not delta:
                 continue
+            if first_delta_at is None:
+                first_delta_at = time.perf_counter() - started
             verdict = guard.feed(delta)
             if not verdict.allowed:
                 # Охранитель сработал: наружу уходит заглушка вместо остатка
@@ -380,6 +410,18 @@ class LlmGateway:
                 yield TokenEvent(delta=verdict.text_for_subscriber or "")
                 break
             yield TokenEvent(delta=delta)
+
+        metrics.record_guardrail(
+            blocked=blocked,
+            reason=guard.verdict.reason.value if guard.verdict.reason else None,
+        )
+        metrics.record_response(
+            channel=channel,
+            inquiry_type=inquiry_type,
+            outcome="blocked" if blocked else "ok",
+            ttft=first_delta_at,
+            total=time.perf_counter() - started,
+        )
 
         yield MetadataEvent(sources=self._sources(request))
         yield DoneEvent(

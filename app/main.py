@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from app.config import get_settings
 from app.gateway.llm_gateway import LlmGateway
@@ -52,6 +53,16 @@ def _build_gateway() -> LlmGateway:
 def create() -> object:
     """Собрать приложение. Вынесено функцией ради проверок."""
     from app.api import create_app
+    from app.metrics import prometheus as metrics
+
+    # Метрики отдаются отдельным портом, а не адресом основного приложения:
+    # правило 4.4 разрешает ровно два адреса, и расширять контракт ради
+    # служебной надобности не следует. Их читает система сбора, абоненту они
+    # не показываются.
+    try:
+        metrics.serve(port=int(os.getenv("METRICS_PORT", "9100")))
+    except OSError as exc:  # порт занят — сервис всё равно должен подняться
+        logger.warning("отдача метрик не запущена: %s", exc)
 
     return create_app(_build_gateway())
 
