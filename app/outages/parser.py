@@ -27,30 +27,35 @@
 как тип и получил пустое имя — то есть уничтожил улицу. Отсюда правило
 :func:`normalize_street`: **последний оставшийся токен не снимается никогда**.
 
-ОШИБКИ НЕ ГЛОТАЮТСЯ. Разбор возвращает не только записи, но и :class:`Problem` —
-всё, что выглядит неправильно: перевёрнутый период, строка без домов,
-неразобранная дата. Молча пропустить строку означало бы тихо потерять адреса, а
-абонент узнал бы об этом, придя за водой.
+ЧТО ОСТАЁТСЯ НЕРЕШЁННЫМ — И ЭТО ОСОЗНАННО.
+
+* **Перевёрнутый период.** В образце есть «с 28 июля по 10 июля» (строка 147).
+  Такая строка не разбирается, и адреса под ней в записи не попадают.
+* **Дубли по адресам.** 40 адресов числятся в двух пересекающихся периодах, 4 —
+  в двух районах сразу. Записи не склеиваются и не выбираются: адрес просто
+  даёт несколько интервалов.
+
+Оба — свойства **файла**, собранного человеком по периодам. В БД, где запись
+заводится на адрес, они не выражаются, а файл на MVP исчезнет (ADR-013).
+Городить разбор противоречий под источник со сроком жизни в один этап дороже,
+чем прожить с ними.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 __all__ = [
     "MONTHS",
     "STREET_TYPES",
     "Outage",
-    "ParseResult",
-    "Problem",
     "normalize_house",
     "normalize_street",
     "parse_period",
     "parse_schedule",
-    "spelling_collisions",
 ]
 
 
@@ -102,29 +107,6 @@ class Outage:
     house_raw: str
 
 
-@dataclass(frozen=True, slots=True)
-class Problem:
-    """Что в источнике выглядит неправильно.
-
-    Не исключение: одна кривая строка не должна ронять разбор всего файла. Но и
-    не молчание — проблемы возвращаются наверх и попадают в отчёт приёма.
-    """
-
-    line_number: int
-    kind: str
-    detail: str
-
-
-@dataclass
-class ParseResult:
-    outages: list[Outage] = field(default_factory=list)
-    problems: list[Problem] = field(default_factory=list)
-
-    @property
-    def districts(self) -> set[str]:
-        return {o.district for o in self.outages}
-
-
 def normalize_street(raw: str) -> str:
     """Привести название улицы к виду, по которому можно искать.
 
@@ -158,19 +140,6 @@ def normalize_street(raw: str) -> str:
     return " ".join(tokens).strip(" ,-")
 
 
-def spelling_collisions(outages: Iterable[Outage]) -> dict[str, set[str]]:
-    """Названия, к которым свелось больше одного написания источника.
-
-    Не ошибка сама по себе — «ул. Димитрова» и «Димитрова» обязаны сойтись, —
-    но место, где слияние стоит проверить глазами: сюда же попадут «Спор.
-    Набережная» и «Набережная», если они окажутся разными улицами.
-    """
-    seen: dict[str, set[str]] = {}
-    for outage in outages:
-        seen.setdefault(outage.street, set()).add(outage.street_raw)
-    return {street: raws for street, raws in seen.items() if len(raws) > 1}
-
-
 def normalize_house(raw: str) -> str:
     """Привести номер дома к сравнимому виду.
 
@@ -185,8 +154,8 @@ def normalize_house(raw: str) -> str:
     return re.sub(r"\s+", "", cleaned).lower()
 
 
-def parse_period(text: str, year: int) -> tuple[list[tuple[date, date]], str | None]:
-    """Разобрать строку периода. Возвращает интервалы и описание проблемы.
+def parse_period(text: str, year: int) -> list[tuple[date, date]]:
+    """Разобрать строку периода в список интервалов.
 
     Обрабатывает всё, что встретилось в образце:
 
@@ -200,7 +169,6 @@ def parse_period(text: str, year: int) -> tuple[list[tuple[date, date]], str | N
         на MVP вопрос не возникает, время приходит из БД типизированным.
     """
     intervals: list[tuple[date, date]] = []
-    inverted: list[str] = []
 
     for chunk in re.split(r"\s+и\s+", text):
         match = _PERIOD_RE.search(chunk)
@@ -216,18 +184,12 @@ def parse_period(text: str, year: int) -> tuple[list[tuple[date, date]], str | N
         end = date(end_year, month_to, int(match.group("d2")))
 
         if end < start:
-            # «с 28 июля по 10 июля» — в образце такое есть. Не исправляем
-            # молча: перевёрнутый интервал не совпадёт ни с одной датой, и
-            # адреса просто исчезли бы из ответов без единого следа.
-            inverted.append(f"{start.isoformat()}..{end.isoformat()}")
+            # «с 28 июля по 10 июля» — в образце такое есть. Не исправляем:
+            # угадывать, какая из двух дат опечатка, значит выдумывать данные.
             continue
         intervals.append((start, end))
 
-    if inverted:
-        return intervals, "конец периода раньше начала: " + ", ".join(inverted)
-    if not intervals:
-        return intervals, "период не разобран"
-    return intervals, None
+    return intervals
 
 
 def _split_houses(text: str) -> Iterator[str]:
@@ -243,18 +205,21 @@ def _split_houses(text: str) -> Iterator[str]:
             yield cleaned
 
 
-def parse_schedule(lines: Iterable[str], *, year: int) -> ParseResult:
+def parse_schedule(lines: Iterable[str], *, year: int) -> list[Outage]:
     """Разобрать график целиком.
 
     Структура источника: заголовок района, затем период, затем строки улиц с
     домами. Период действует до следующего периода, район — до следующего
     района.
+
+    Строки, которые не разбираются, пропускаются: перечень их видов и причина,
+    по которой они не чинятся, — в шапке модуля.
     """
-    result = ParseResult()
+    outages: list[Outage] = []
     district: str | None = None
     intervals: list[tuple[date, date]] = []
 
-    for number, raw_line in enumerate(lines, start=1):
+    for raw_line in lines:
         line = raw_line.strip()
         if not line:
             continue
@@ -266,26 +231,15 @@ def parse_schedule(lines: Iterable[str], *, year: int) -> ParseResult:
             continue
 
         if re.match(r"^с\s+\d", line, re.IGNORECASE):
-            intervals, problem = parse_period(line, year)
-            if problem is not None:
-                result.problems.append(Problem(number, "период", f"{problem}: {line!r}"))
+            intervals = parse_period(line, year)
             continue
 
-        if district is None:
-            result.problems.append(Problem(number, "нет района", f"строка вне района: {line!r}"))
-            continue
-        if not intervals:
-            result.problems.append(Problem(number, "нет периода", f"строка вне периода: {line!r}"))
+        if district is None or not intervals:
             continue
 
         street_raw, _, houses_raw = line.partition(",")
-        if not houses_raw.strip():
-            result.problems.append(Problem(number, "нет домов", f"улица без домов: {line!r}"))
-            continue
-
         street = normalize_street(street_raw)
-        if not street:
-            result.problems.append(Problem(number, "пустая улица", f"{street_raw!r}"))
+        if not houses_raw.strip() or not street:
             continue
 
         for house_raw in _split_houses(houses_raw):
@@ -293,7 +247,7 @@ def parse_schedule(lines: Iterable[str], *, year: int) -> ParseResult:
             if not house:
                 continue
             for starts_on, ends_on in intervals:
-                result.outages.append(
+                outages.append(
                     Outage(
                         district=district,
                         street=street,
@@ -305,4 +259,4 @@ def parse_schedule(lines: Iterable[str], *, year: int) -> ParseResult:
                     )
                 )
 
-    return result
+    return outages

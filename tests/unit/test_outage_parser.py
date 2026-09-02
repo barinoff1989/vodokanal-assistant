@@ -22,7 +22,6 @@ from app.outages.parser import (
     normalize_street,
     parse_period,
     parse_schedule,
-    spelling_collisions,
 )
 
 FIXTURE = Path(__file__).resolve().parents[1] / "data" / "outage_schedule.txt"
@@ -86,7 +85,7 @@ def test_составное_название_с_типом_сводится_к_�
 
 def test_нормализация_никогда_не_даёт_пустоту(schedule):
     """Пустое название означало бы потерянные адреса без единого следа."""
-    assert all(outage.street for outage in schedule.outages)
+    assert all(outage.street for outage in schedule)
 
 
 # --- нормализация домов ------------------------------------------------------ #
@@ -132,22 +131,17 @@ def test_номер_дома_приводится_к_сравнимому_вид
     ],
 )
 def test_все_формулировки_периода_разбираются(text: str, expected):
-    intervals, problem = parse_period(text, YEAR)
-    assert intervals == expected
-    assert problem is None
+    assert parse_period(text, YEAR) == expected
 
 
-def test_период_с_концом_раньше_начала_не_исправляется_молча():
+def test_период_с_концом_раньше_начала_не_разбирается():
     """В файле такой есть: «с 28 июля по 10 июля» (строка 147).
 
-    Перевёрнутый интервал не совпадёт ни с одной датой, и адреса под ним просто
-    исчезли бы из ответов. Поэтому он не берётся в записи, но и не проглатывается:
-    проблема возвращается наверх.
+    Не чиним: угадывать, какая из двух дат опечатка, значит выдумывать данные.
+    Адреса под таким периодом в записи не попадают — это известная и принятая
+    потеря, см. шапку модуля.
     """
-    intervals, problem = parse_period("с 28 июля по 10 июля", YEAR)
-    assert intervals == []
-    assert problem is not None
-    assert "раньше начала" in problem
+    assert parse_period("с 28 июля по 10 июля", YEAR) == []
 
 
 def test_период_через_новый_год_не_уходит_в_прошлое():
@@ -156,51 +150,56 @@ def test_период_через_новый_год_не_уходит_в_прош
     Без учёта перехода «с 28 декабря по 10 января» дало бы конец на 11 месяцев
     раньше начала — то есть выглядело бы как дефект источника, которого нет.
     """
-    intervals, problem = parse_period("с 28 декабря по 10 января", YEAR)
-    assert intervals == [(date(2026, 12, 28), date(2027, 1, 10))]
-    assert problem is None
+    assert parse_period("с 28 декабря по 10 января", YEAR) == [
+        (date(2026, 12, 28), date(2027, 1, 10))
+    ]
 
 
 # --- разбор файла целиком ---------------------------------------------------- #
 
 
 def test_файл_разбирается_целиком(schedule):
-    assert len(schedule.districts) == 6
-    assert len(schedule.outages) > 1800
-    assert len({(o.district, o.street, o.house) for o in schedule.outages}) > 1800
+    assert len({o.district for o in schedule}) == 6
+    assert len(schedule) > 1800
+    assert len({(o.district, o.street, o.house) for o in schedule}) > 1800
 
 
-def test_проблемы_источника_видны_а_не_проглочены(schedule):
-    """Две штуки, обе настоящие.
+def test_дубли_по_адресам_остаются_дублями(schedule):
+    """40 адресов числятся в двух пересекающихся периодах, 4 — в двух районах.
 
-    Перевёрнутый период на строке 147 и единственный адрес под ним на строке
-    149, оставшийся без периода. Второе — следствие первого, и это правильно:
-    приписать адрес к предыдущему периоду означало бы выдумать данные.
+    Не склеиваем и не выбираем: это свойство файла, собранного человеком по
+    периодам, а в БД оно не выражается (ADR-013). Адрес просто даёт несколько
+    интервалов, и показать надо все — выбор без основания хуже, потому что не
+    виден.
     """
-    kinds = {p.kind for p in schedule.problems}
-    assert "период" in kinds
-    assert "нет периода" in kinds
-    assert all(p.line_number > 0 for p in schedule.problems)
+    intervals = {
+        (o.starts_on, o.ends_on)
+        for o in schedule
+        if o.street == "димитрова" and o.house == "2"
+    }
+    assert len(intervals) > 1
 
 
 def test_висячие_запятые_не_дают_пустых_домов(schedule):
     """В файле три висячие запятые (строки 27, 80, 85)."""
-    assert all(outage.house for outage in schedule.outages)
+    assert all(outage.house for outage in schedule)
 
 
 def test_точка_с_запятой_внутри_списка_домов_разделяет(schedule):
     """«ул. Мопра, 2а, 3, 8б, 12а, 15, 15/1, 18б; 19/1, 75» — точка с запятой
     стоит посреди перечня домов, а не в конце строки. Всего таких мест четыре."""
-    mopra = {o.house for o in schedule.outages if o.street == "мопра"}
+    mopra = {o.house for o in schedule if o.street == "мопра"}
     assert {"18б", "19/1", "75"} <= mopra
 
 
 def test_исходное_написание_сохраняется(schedule):
-    """Чтобы расхождение можно было предъявить владельцу, а не пересказать."""
-    assert all(o.street_raw for o in schedule.outages)
-    merged = spelling_collisions(schedule.outages)
-    assert "димитрова" in merged
-    assert {"Димитрова", "ул. Димитрова"} <= merged["димитрова"]
+    """Чтобы расхождение можно было предъявить владельцу, а не пересказать.
+
+    «Димитрова» и «ул. Димитрова» сводятся к одному названию — оба написания
+    должны остаться видимыми.
+    """
+    raws = {o.street_raw for o in schedule if o.street == "димитрова"}
+    assert {"Димитрова", "ул. Димитрова"} <= raws
 
 
 def test_составной_период_разворачивается_в_две_записи(schedule):
@@ -211,7 +210,7 @@ def test_составной_период_разворачивается_в_дв�
     """
     intervals = {
         (o.starts_on, o.ends_on)
-        for o in schedule.outages
+        for o in schedule
         if o.street == "студенческая" and o.house == "34"
     }
     assert len(intervals) == 2
@@ -224,7 +223,7 @@ def test_запись_повторяет_форму_будущей_бд(schedule
     Проверяется составом полей: если запись снова станет «периодом со списком
     улиц», переход на онлайн-доступ потребует переписать всё, что за ней.
     """
-    outage = schedule.outages[0]
+    outage = schedule[0]
     assert isinstance(outage, Outage)
     assert {"district", "street", "house", "starts_on", "ends_on"} <= set(Outage.__slots__)
     assert isinstance(outage.starts_on, date)
