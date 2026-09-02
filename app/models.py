@@ -320,6 +320,11 @@ class DoneEvent(BaseModel):
     event: Literal["done"] = "done"
     finish_reason: FinishReason = FinishReason.STOP
     usage: Usage = Field(default_factory=Usage)
+    pii_report: PiiReport = Field(default_factory=PiiReport)
+    """Тот же отчёт, что и в ответе целиком (раздел 7.3): значений он не
+    содержит по построению, только перечень типов найденного. Без него два пути
+    — поток и ответ целиком — отдавали бы разное."""
+
     trace_id: str
 
 

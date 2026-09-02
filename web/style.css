@@ -1,0 +1,216 @@
+/* Демо-стенд. Оформление намеренно сдержанное: это заглушка вместо личного
+   кабинета, а не дизайн-макет. Задача — чтобы на защите было видно устройство
+   виджета и то, что происходит под ним. */
+
+:root {
+  --bg: #f4f7f8;
+  --surface: #fff;
+  --surface-2: #eef3f5;
+  --ink: #12222b;
+  --ink-muted: #5b7079;
+  --line: #d8e3e7;
+  --accent: #0e7c86;
+  --accent-ink: #06373d;
+  --good: #1b8f5e;
+  --warn: #a66a12;
+  --crit: #b33d26;
+  --crit-bg: #fbe6e1;
+  --good-bg: #e4f5ec;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c161a;
+    --surface: #121e23;
+    --surface-2: #18262c;
+    --ink: #e6f0f2;
+    --ink-muted: #91a7ad;
+    --line: #24343a;
+    --accent: #3fc7d1;
+    --accent-ink: #bdf0f3;
+    --good: #4fcb93;
+    --warn: #e3ae55;
+    --crit: #e88a76;
+    --crit-bg: #33170f;
+    --good-bg: #123326;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+}
+
+/* --- Шапка кабинета ------------------------------------------------------- */
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 22px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.brand .drop { color: var(--accent); font-size: 20px; }
+
+/* Пометка, что кабинет ненастоящий. Без неё стенд на скриншоте неотличим от
+   рабочей системы, и это вводило бы в заблуждение. */
+.stand-mark {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--warn); border: 1px dashed var(--warn);
+  padding: 3px 9px; border-radius: 999px;
+}
+
+/* --- Раскладка ------------------------------------------------------------ */
+
+.layout {
+  display: grid; grid-template-columns: 340px 1fr; gap: 18px;
+  max-width: 1180px; margin: 0 auto; padding: 18px 22px 40px;
+  align-items: start;
+}
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+.side { display: flex; flex-direction: column; gap: 14px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 15px 17px;
+}
+.card h2 { margin: 0 0 6px; font-size: 15px; }
+.hint { margin: 0 0 12px; font-size: 12.5px; color: var(--ink-muted); }
+
+.field { display: block; margin-bottom: 12px; }
+.field span { display: block; font-size: 12px; color: var(--ink-muted); margin-bottom: 4px; }
+.field select {
+  width: 100%; padding: 7px 9px; font: inherit;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px;
+}
+
+.profile, .metrics { margin: 0; font-size: 13px; }
+.profile dt, .metrics dt { color: var(--ink-muted); font-size: 12px; margin-top: 8px; }
+.profile dd, .metrics dd { margin: 1px 0 0; font-family: var(--mono); font-size: 12.5px; }
+.metrics dd.alarm { color: var(--crit); font-weight: 600; }
+
+.stub-note {
+  margin: 14px 0 0; padding: 8px 10px; border-radius: 7px;
+  background: var(--surface-2); border-left: 3px solid var(--warn);
+  font-size: 12px; color: var(--ink-muted);
+}
+
+.events-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin: 14px 0 6px; font-size: 12px; color: var(--ink-muted);
+}
+.link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font: inherit; font-size: 12px; text-decoration: underline;
+}
+.events {
+  margin: 0; padding: 8px 10px; list-style: none;
+  background: var(--surface-2); border-radius: 7px;
+  font-family: var(--mono); font-size: 11.5px;
+  max-height: 220px; overflow-y: auto;
+}
+.events li { padding: 2px 0; border-bottom: 1px solid var(--line); }
+.events li:last-child { border-bottom: none; }
+.events .ev-token { color: var(--ink-muted); }
+.events .ev-error { color: var(--crit); }
+.events .ev-done { color: var(--good); }
+
+/* --- Виджет --------------------------------------------------------------- */
+
+.widget {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; display: flex; flex-direction: column; min-height: 560px;
+}
+.widget-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.widget-head h1 { margin: 0; font-size: 16px; }
+.state {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-muted);
+}
+.state.busy { color: var(--accent); }
+.state.error { color: var(--crit); }
+
+.feed {
+  flex: 1; margin: 0; padding: 16px 18px; list-style: none;
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto; max-height: 52vh;
+}
+.msg .who {
+  font-size: 11px; color: var(--ink-muted); margin-bottom: 3px;
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em;
+}
+.msg .text {
+  padding: 10px 13px; border-radius: 10px; white-space: pre-wrap;
+  background: var(--surface-2);
+}
+.msg.user .text { background: var(--accent); color: #fff; }
+.msg.user { align-self: flex-end; max-width: 78%; }
+.msg.assistant { align-self: flex-start; max-width: 88%; }
+.msg.problem .text {
+  background: var(--crit-bg); border-left: 3px solid var(--crit);
+}
+
+/* Курсор во время печати — видимое подтверждение того, что ответ идёт потоком */
+.msg .text.typing::after {
+  content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.sources {
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+  font-size: 12px; color: var(--ink-muted);
+}
+.sources b { color: var(--ink); font-weight: 600; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.actions button {
+  font: inherit; font-size: 12.5px; padding: 5px 11px; cursor: pointer;
+  background: var(--surface); color: var(--accent-ink);
+  border: 1px solid var(--accent); border-radius: 999px;
+}
+
+/* --- Подтверждение (правило 4.7) ------------------------------------------ */
+
+.confirm {
+  margin: 0 18px 14px; padding: 13px 15px;
+  background: var(--surface-2); border: 1px solid var(--accent);
+  border-radius: 9px;
+}
+.confirm-title { font-weight: 600; margin-bottom: 6px; }
+.confirm-body { font-size: 13.5px; white-space: pre-wrap; }
+.confirm-actions { display: flex; gap: 9px; margin-top: 11px; }
+.confirm-note { margin: 9px 0 0; font-size: 11.5px; color: var(--ink-muted); }
+
+/* --- Ввод ------------------------------------------------------------------ */
+
+.composer { display: flex; gap: 9px; padding: 14px 18px 6px; border-top: 1px solid var(--line); }
+.composer textarea {
+  flex: 1; resize: vertical; font: inherit; padding: 9px 11px;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.composer-foot {
+  display: flex; justify-content: space-between;
+  padding: 0 18px 14px; font-size: 11.5px; color: var(--ink-muted);
+  font-family: var(--mono);
+}
+
+button.primary {
+  font: inherit; font-weight: 600; padding: 9px 17px; cursor: pointer;
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+}
+button.primary:disabled { opacity: .5; cursor: default; }
+button.ghost {
+  font: inherit; padding: 9px 17px; cursor: pointer;
+  background: none; color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+}

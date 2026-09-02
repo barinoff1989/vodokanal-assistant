@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -62,11 +63,22 @@ __all__ = [
     "ProviderTimeoutError",
 ]
 
+UPSTREAM_DETAIL = "Сервис ответа временно недоступен. Попробуйте повторить запрос."
+"""Что видит абонент при сбое провайдера.
+
+Внутренний текст ошибки наружу не идёт: он содержит адреса, порты и подробности
+устройства системы, абоненту непонятен и раскрывает лишнее. Техническая причина
+пишется в журнал рядом с опознавателем запроса — по нему жалоба связывается с
+записью.
+"""
+
 ERROR_BASE = "https://vodokanal.example/errors"
 """Основа для поля `type` в теле ошибки. По RFC 7807 это опознаватель типа
 проблемы, а не адрес, который обязан открываться."""
 
 GatewayEvent = TokenEvent | MetadataEvent | DoneEvent | ErrorEvent
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderError(RuntimeError):
@@ -106,6 +118,29 @@ class LlmGateway:
         )
         self._quota = quota
         self._completion = completion
+
+    def warmup(self) -> None:
+        """Прогреть тяжёлые зависимости до первого запроса абонента.
+
+        Обе грузятся лениво, и без прогрева эти секунды платит первый абонент.
+        Замер на стенде дал 8,0 с до первого куска ответа при цели в 500 мс,
+        хотя провайдер отвечал за 0,28 с. Разбор по слагаемым:
+
+        ===================================== ======
+          импорт LiteLLM                        7,0 с
+          загрузка языковой модели               4,0 с
+          первый вызов после прогрева            1,3 с
+          последующие вызовы                     0,28 с
+        ===================================== ======
+
+        Ленивая загрузка удобна в проверках — они не тянут ни LiteLLM, ни
+        языковую модель, — но в сервисе её нужно выполнить заранее.
+        """
+        self._sanitizer.sanitize("прогрев")
+        if self._completion is None:
+            # Импорт, а не вызов: тратить токены на прогрев незачем, а семь
+            # секунд уходило именно на разбор библиотеки.
+            import litellm  # noqa: F401
 
     # -- вспомогательное ------------------------------------------------------ #
 
@@ -264,10 +299,15 @@ class LlmGateway:
         try:
             raw = await self._call(request, messages, stream=False)
         except ProviderTimeoutError as exc:
-            return self.problem("upstream-timeout", "LLM provider timeout", 504, trace_id, str(exc))
-        except Exception as exc:  # noqa: BLE001 — любая ошибка провайдера это 502
+            logger.warning("провайдер не ответил вовремя: %s | %s", exc, trace_id)
             return self.problem(
-                "upstream-unavailable", "LLM provider unavailable", 502, trace_id, str(exc)
+                "upstream-timeout", "LLM provider timeout", 504, trace_id, UPSTREAM_DETAIL
+            )
+        except Exception as exc:  # noqa: BLE001 — любая ошибка провайдера это 502
+            logger.warning("провайдер ответил ошибкой: %s | %s", exc, trace_id)
+            return self.problem(
+                "upstream-unavailable", "LLM provider unavailable", 502, trace_id,
+                UPSTREAM_DETAIL,
             )
 
         answer = _extract_text(raw)
@@ -306,16 +346,20 @@ class LlmGateway:
         try:
             raw_stream = await self._call(request, messages, stream=True)
         except ProviderTimeoutError as exc:
+            logger.warning("провайдер не ответил вовремя: %s | %s", exc, trace_id)
             yield ErrorEvent(
                 problem=self.problem(
-                    "upstream-timeout", "LLM provider timeout", 504, trace_id, str(exc)
+                    "upstream-timeout", "LLM provider timeout", 504, trace_id,
+                    UPSTREAM_DETAIL,
                 )
             )
             return
         except Exception as exc:  # noqa: BLE001
+            logger.warning("провайдер ответил ошибкой: %s | %s", exc, trace_id)
             yield ErrorEvent(
                 problem=self.problem(
-                    "upstream-unavailable", "LLM provider unavailable", 502, trace_id, str(exc)
+                    "upstream-unavailable", "LLM provider unavailable", 502, trace_id,
+                    UPSTREAM_DETAIL,
                 )
             )
             return
@@ -341,12 +385,9 @@ class LlmGateway:
         yield DoneEvent(
             finish_reason=FinishReason.GUARDRAIL if blocked else FinishReason.STOP,
             usage=Usage(),
+            pii_report=report,
             trace_id=trace_id,
         )
-        # Отчёт об обезличивании собран, но никуда не пишется: приёмник появится
-        # на шаге 10 вместе с телеметрией. Здесь он остаётся частью ответа
-        # целиком (`generate`) — см. `pii_report` там.
-        _ = report
 
 
 # --- разбор ответа провайдера --------------------------------------------------- #

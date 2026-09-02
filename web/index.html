@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Личный кабинет абонента — демо-стенд</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!--
+  Демо-стенд вместо личного кабинета.
+
+  Настоящий кабинет находится внутри закрытой сети водоканала, доступа к нему на
+  прототипе не будет ни на разработке, ни на демонстрации. Эта страница
+  имитирует его ровно настолько, чтобы виджет было где показать.
+
+  На L2 виджет заявлен как React внутри существующего кабинета, и это решение не
+  меняется. Здесь простая страница без сборочного конвейера: React ничего бы не
+  проверил архитектурно, зато потребовал бы установки Node и второго процесса на
+  демонстрации.
+-->
+
+<header class="topbar">
+  <div class="brand">
+    <span class="drop">◍</span>
+    <span>Водоканал · Личный кабинет</span>
+  </div>
+  <div class="stand-mark" title="Настоящий кабинет внутри закрытой сети; это имитация">
+    демо-стенд
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- Левая колонка: кто вошёл и что о нём известно -->
+  <aside class="side">
+    <section class="card">
+      <h2>Абонент</h2>
+      <p class="hint">
+        Переключатель нужен не для вида: только так можно показать привязку сессии
+        к абоненту и вручную воспроизвести попытку подтвердить чужой черновик.
+      </p>
+      <label class="field">
+        <span>Вошли как</span>
+        <select id="subscriber"></select>
+      </label>
+
+      <dl class="profile" id="profile"></dl>
+
+      <p class="stub-note">
+        Данные профиля — заглушка. Настоящий Биллинг внутри закрытой сети;
+        синтетический слепок появится на шаге 0, который ждёт примеры структуры.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Служебная панель</h2>
+      <p class="hint">Видно то, что абоненту не показывают: сырые события, отчёты, расход.</p>
+
+      <dl class="metrics">
+        <dt>Опознаватель запроса</dt><dd id="m-trace">—</dd>
+        <dt>Найдено ПДн</dt><dd id="m-pii">—</dd>
+        <dt>Причина завершения</dt><dd id="m-finish">—</dd>
+        <dt>Токенов за сессию</dt><dd id="m-tokens">0</dd>
+        <dt>Время до первого куска</dt><dd id="m-ttft">—</dd>
+      </dl>
+
+      <div class="events-head">
+        <span>События потока</span>
+        <button type="button" id="clear-events" class="link">очистить</button>
+      </div>
+      <ol class="events" id="events"></ol>
+    </section>
+  </aside>
+
+  <!-- Правая колонка: сам виджет -->
+  <section class="widget">
+    <div class="widget-head">
+      <h1>AI-помощник</h1>
+      <span class="state" id="state">готов</span>
+    </div>
+
+    <ol class="feed" id="feed">
+      <li class="msg assistant">
+        <div class="who">Помощник</div>
+        <div class="text">
+          Здравствуйте. Подскажу по перерасчёту, поверке счётчика, задолженности и другим
+          обращениям. Спросите своими словами.
+        </div>
+      </li>
+    </ol>
+
+    <!-- Подтверждение операции записи. Правило 4.7: без него запись невозможна. -->
+    <div class="confirm" id="confirm" hidden>
+      <div class="confirm-title">Подтвердите отправку</div>
+      <div class="confirm-body" id="confirm-body"></div>
+      <div class="confirm-actions">
+        <button type="button" class="primary" id="confirm-yes">Подтверждаю</button>
+        <button type="button" class="ghost" id="confirm-no">Отменить</button>
+      </div>
+      <p class="confirm-note">Этап 2. На прототипе не разворачивается — показано устройство.</p>
+    </div>
+
+    <form class="composer" id="composer">
+      <textarea id="query" rows="2" maxlength="2000"
+        placeholder="Например: как часто нужно поверять счётчик?"></textarea>
+      <button type="submit" class="primary" id="send">Спросить</button>
+    </form>
+    <div class="composer-foot">
+      <span id="counter">0 / 2000</span>
+      <span class="rule-note">ответ приходит потоком — правило 4.3</span>
+    </div>
+  </section>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
