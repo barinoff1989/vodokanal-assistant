@@ -4,13 +4,27 @@ version = "0.0.1"
 description = "AI-помощник абонента водоканала — прототип"
 requires-python = ">=3.12,<3.13"
 
-# Зависимости добавляются по шагам плана разработки (Dev_Plan.html, раздел 2.2).
-# На шаге 0.5 нужен минимум: шлюз к моделям и настройки из окружения.
+# Здесь то, без чего сервис не запускается, — и ничего кроме.
+#
+# ПОРЯДОК БЫЛ ОБРАТНЫМ, И ЭТО БЫЛ ДЕФЕКТ. `fastapi`, `sse-starlette`,
+# `prometheus-client` и `pyyaml` лежали в необязательных группах, хотя
+# импортируются на уровне модуля: `pip install .` давал окружение, в котором
+# `import app.gateway.llm_gateway` падает. `litellm` наоборот числился
+# обязательным, хотя импортируется лениво.
+#
+# Разделение установки по шагам осталось — но в `Makefile`, где ему и место:
+# это удобство разработки, а не свойство пакета. Здесь описывается правда.
 dependencies = [
     "litellm",
     "pydantic>=2",
     "pydantic-settings",
     "httpx",
+    "fastapi",
+    "uvicorn",
+    "sse-starlette",
+    "prometheus-client",
+    "pyyaml",
+    "redis",
 ]
 
 [project.optional-dependencies]
@@ -35,24 +49,6 @@ data = [
 pii = [
     "presidio-analyzer",
     "presidio-anonymizer",
-]
-
-# Ставится на шаге 4 — шлюз к модели: счётчики лимитов и состояние сессии.
-gateway = [
-    "redis",
-    "slowapi",
-]
-
-# Ставится на шаге 8 — HTTP-интерфейс и демо-стенд.
-api = [
-    "fastapi",
-    "uvicorn",
-    "sse-starlette",
-]
-
-# Ставится на шаге 10 — наблюдаемость.
-observability = [
-    "prometheus-client",
 ]
 
 [build-system]

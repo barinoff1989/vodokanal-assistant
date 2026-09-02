@@ -50,25 +50,22 @@ def _problem_response(problem: ProblemDetail) -> JSONResponse:
     `Retry-After` ставится для 429 и 503: правило 4.5 требует его при отказе по
     лимиту, а ADR-008 — при недоступности хранилища счётчиков. Без заголовка
     виджет не знает, когда повторять, и либо давит запросами, либо сдаётся.
+
+    Значение берётся из поля `retry_after`, а не из текста пояснения. Прежняя
+    редакция выскабливала первое число из русской прозы: на `429` это работало
+    случайно, а на `503` цифр в пояснении нет вовсе — заголовок всегда получал
+    зашитую тридцатку, и настройка `quota_retry_after_seconds` не влияла ни на
+    что.
     """
     headers: dict[str, str] = {}
-    if problem.status in (429, 503):
-        headers["Retry-After"] = str(_retry_after_from(problem))
+    if problem.status in (429, 503) and problem.retry_after is not None:
+        headers["Retry-After"] = str(problem.retry_after)
     return JSONResponse(
         status_code=problem.status,
         content=problem.model_dump(exclude_none=True),
         media_type=PROBLEM_JSON,
         headers=headers,
     )
-
-
-def _retry_after_from(problem: ProblemDetail) -> int:
-    """Вытащить время повтора из пояснения либо взять безопасное значение."""
-    detail = problem.detail or ""
-    for word in detail.replace("с;", " ").split():
-        if word.isdigit():
-            return int(word)
-    return 30
 
 
 def _sse(event_name: str, payload: dict[str, Any]) -> str:

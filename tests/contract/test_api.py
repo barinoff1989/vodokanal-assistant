@@ -14,6 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import PROBLEM_JSON, create_app
+from app.gateway.llm_gateway import LlmGateway
+from app.gateway.pii_filter import PiiSanitizer
 from app.models import (
     DoneEvent,
     ErrorEvent,
@@ -148,6 +150,7 @@ def test_у_отказов_есть_время_повтора(status: int):
         title="X",
         status=status,
         detail="повторите через 17 с",
+        retry_after=17,
     )
     body = {**BODY, "parameters": {"stream": False}}
     response = _client(FakeGateway(problem=problem)).post("/v1/generate", json=body)
@@ -220,3 +223,65 @@ def test_не_json_вовсе_тоже_даёт_400():
         headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 400
+
+
+def test_время_повтора_берётся_из_поля_а_не_из_текста():
+    """Настоящий дефект, найденный разбором кода.
+
+    Прежняя редакция выскабливала первое число из русского пояснения. На `429`
+    это работало случайно — там в тексте стоит остаток окна. На `503` цифр в
+    пояснении нет вовсе, и заголовок всегда получал зашитую тридцатку, а
+    настройка `quota_retry_after_seconds` не влияла ни на что.
+
+    Здесь пояснение содержит **другое** число: если заголовок снова начнут
+    собирать из текста, тест это увидит.
+    """
+    problem = ProblemDetail(
+        type="https://vodokanal.example/errors/quota-store-unavailable",
+        title="Service temporarily unavailable",
+        status=503,
+        detail="Сервис временно недоступен. Повторите не ранее чем через 999 с.",
+        retry_after=45,
+    )
+    body = {**BODY, "parameters": {"stream": False}}
+    response = _client(FakeGateway(problem=problem)).post("/v1/generate", json=body)
+
+    assert response.headers["Retry-After"] == "45"
+
+
+async def _never_called(*args: object, **kwargs: object) -> object:
+    raise AssertionError("провайдер вызван, хотя хранилище лимитов недоступно")
+
+
+def test_настройка_времени_повтора_доходит_до_заголовка():
+    """Сквозная проверка от настройки до заголовка.
+
+    Без неё величина остаётся написанной и неподключённой — ровно так выглядел
+    исходный дефект: `store_retry_after` доходил до `QuotaManager` и там
+    кончался.
+    """
+    from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
+
+    class BrokenRedis:
+        def pipeline(self, *args: object, **kwargs: object) -> object:
+            raise QuotaStoreUnavailableError("хранилище недоступно")
+
+        def incr(self, *args: object, **kwargs: object) -> object:
+            raise QuotaStoreUnavailableError("хранилище недоступно")
+
+    gateway = LlmGateway(
+        quota=QuotaManager(
+            BrokenRedis(),
+            subscriber_limit=100,
+            session_limit=100,
+            service_limit=100,
+            store_retry_after=77,
+        ),
+        completion=_never_called,
+        sanitizer=PiiSanitizer(analyzer=None),
+    )
+    body = {**BODY, "parameters": {"stream": False}}
+    response = _client(gateway).post("/v1/generate", json=body)
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "77"

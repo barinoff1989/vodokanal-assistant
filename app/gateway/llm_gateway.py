@@ -188,7 +188,13 @@ class LlmGateway:
         return f"trace-{uuid.uuid4().hex[:16]}"
 
     def problem(
-        self, slug: str, title: str, status: int, trace_id: str, detail: str | None = None
+        self,
+        slug: str,
+        title: str,
+        status: int,
+        trace_id: str,
+        detail: str | None = None,
+        retry_after: int | None = None,
     ) -> ProblemDetail:
         return ProblemDetail(
             type=f"{ERROR_BASE}/{slug}",
@@ -197,6 +203,7 @@ class LlmGateway:
             detail=detail,
             instance="/v1/generate",
             trace_id=trace_id,
+            retry_after=retry_after,
         )
 
     def _prepare(self, request: GenerateRequest) -> tuple[list[dict[str, str]], PiiReport]:
@@ -250,13 +257,19 @@ class LlmGateway:
                 503,
                 trace_id,
                 "Сервис временно недоступен. Попробуйте повторить запрос позже.",
+                retry_after=self._quota.store_retry_after,
             )
         if not decision.allowed:
             metrics.record_quota_rejection(
                 decision.scope.value if decision.scope else "unknown"
             )
             return self.problem(
-                "quota-exceeded", "Too many requests", 429, trace_id, decision.detail
+                "quota-exceeded",
+                "Too many requests",
+                429,
+                trace_id,
+                decision.detail,
+                retry_after=decision.retry_after,
             )
         return None
 

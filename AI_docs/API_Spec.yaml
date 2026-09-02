@@ -500,6 +500,12 @@ components:
           - type: 'null'
           default: null
           title: Trace Id
+        retry_after:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Retry After
       required:
       - type
       - title

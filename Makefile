@@ -4,15 +4,14 @@
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm install-data install-pii install-gateway model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii model-pull preflight test test-live lint typecheck check
 
 help:
-	@echo "install-min — минимум для прогона тестов (быстро, ~5 МБ)"
-	@echo "install     — то же + настройки из окружения"
-	@echo "install-llm — тяжёлый LiteLLM, нужен только для живой проверки и шага 4"
+	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
+	@echo "install     — весь пакет целиком, включая LiteLLM и Redis"
+	@echo "install-llm — только тяжёлый LiteLLM, если install-min уже прошёл"
 	@echo "install-data — генератор синтетики (шаг 0)"
 	@echo "install-pii — защита персональных данных + русская модель (шаг 3)"
-	@echo "install-gateway — клиент Redis и ограничитель запросов (шаг 4)"
 	@echo "model-pull  — скачать локальную тестовую модель в Ollama"
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
 	@echo "test        — тесты без внешних зависимостей"
@@ -21,25 +20,27 @@ help:
 	@echo "typecheck   — mypy"
 	@echo "check       — lint + typecheck + test"
 
-# Установка разбита на три части намеренно: LiteLLM тянет десятки мегабайт
-# зависимостей и на нестабильном канале обрывается по таймауту. Тестам он не
-# нужен — импортируется лениво, только в момент реального вызова модели.
+# Установка разбита намеренно: LiteLLM тянет десятки мегабайт зависимостей и на
+# нестабильном канале обрывается по таймауту. Тестам он не нужен — импортируется
+# лениво, только в момент реального вызова модели.
+#
+# Это удобство разработки, а не свойство пакета: в `pyproject.toml` LiteLLM
+# числится обязательным, потому что без него сервис не ответит.
 PIP_SLOW = -m pip install --timeout 120 --retries 10
 
+# Всё, что импортируется тестами на уровне модуля. Без этого набора `pytest`
+# падает на импорте, а не пропускает проверки.
 install-min:
-	$(PYTHON) $(PIP_SLOW) pytest pytest-asyncio
+	$(PYTHON) $(PIP_SLOW) pytest pytest-asyncio ruff mypy 		pydantic pydantic-settings httpx fastapi sse-starlette 		prometheus-client pyyaml
 
 install: install-min
-	$(PYTHON) $(PIP_SLOW) pydantic pydantic-settings httpx ruff mypy
+	$(PYTHON) $(PIP_SLOW) "."
 
 install-llm:
 	$(PYTHON) $(PIP_SLOW) litellm
 
 install-data:
 	$(PYTHON) $(PIP_SLOW) ".[data]"
-
-install-gateway:
-	$(PYTHON) $(PIP_SLOW) ".[gateway]"
 
 install-pii:
 	$(PYTHON) $(PIP_SLOW) ".[pii]"
