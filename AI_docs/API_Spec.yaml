@@ -1,0 +1,606 @@
+# Файл собран скриптом scripts/build_openapi.py из моделей app/models.py.
+# Править руками бессмысленно: правку затрёт следующая сборка.
+openapi: 3.0.3
+info:
+  title: AI-помощник абонента водоканала — шлюз к модели
+  version: 1.0.0
+  description: 'Контракт между Backend и шлюзом к модели.
+
+
+    Разрешены **ровно два адреса** (правило 4.4): генерация и проверка доступности. Адрес `/models` удалён
+    из контракта сознательно, добавлять новые нельзя без обновления диаграммы контейнеров.
+
+
+    Отдача метрик живёт на отдельном порту и в этот контракт не входит: её читает система сбора, а не
+    виджет абонента.
+
+
+    **Файл собирается из моделей данных** скриптом `scripts/build_openapi.py`. Править его руками бессмысленно
+    — правку затрёт следующая сборка; менять нужно модели в `app/models.py`.'
+servers:
+- url: http://llm-gateway.ai-app.svc.cluster.local:8000
+  description: 'Рабочий контур: внутренний адрес кластера'
+- url: http://localhost:8000
+  description: Машина разработчика. Рабочим контуром не является
+security:
+- InternalToken: []
+tags:
+- name: generate
+  description: Генерация ответа абоненту
+- name: ops
+  description: Эксплуатация
+paths:
+  /v1/generate:
+    post:
+      tags:
+      - generate
+      summary: Сгенерировать ответ абоненту
+      description: 'По умолчанию ответ отдаётся **потоком** (правило 4.3): абонент должен видеть, что
+        ответ печатается. Значение `stream: false` допустимо для служебных вызовов вроде классификации,
+        где промежуточный вывод некому показывать.
+
+
+        Порядок проверок внутри шлюза зафиксирован и не меняется: лимиты, обезличивание, вызов модели,
+        охранители. Лимиты первыми — отклонить по превышению дешевле, чем тратить процессор на обезличивание.'
+      parameters:
+      - name: X-Trace-Id
+        in: header
+        required: false
+        description: 'Опознаватель запроса. Если не передан, шлюз создаёт свой и возвращает его в ответе:
+          без него жалобу абонента невозможно связать с записью в журнале.'
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequest'
+      responses:
+        '200':
+          description: 'Ответ. Формат зависит от `parameters.stream`: поток событий либо готовый ответ
+            целиком.'
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+              examples:
+                поток:
+                  summary: Последовательность событий
+                  value: 'event: token
+
+                    data: {"event":"token","delta":"Поверку "}
+
+
+                    event: token
+
+                    data: {"event":"token","delta":"проводят раз в шесть лет."}
+
+
+                    event: metadata
+
+                    data: {"event":"metadata","sources":[],"confidence_score":0.0}
+
+
+                    event: done
+
+                    data: {"event":"done","finish_reason":"stop","trace_id":"trace-1"}
+
+
+                    '
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateResponse'
+        '400':
+          description: Неверный запрос. Тело не прошло проверку схемы.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Не авторизован. Отсутствует или неверен внутренний токен.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          description: Превышена квота. Лимит на абонента, сессию или сервис исчерпан (раздел 35.1). Заголовок
+            `Retry-After` обязателен.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          headers:
+            Retry-After:
+              description: Через сколько секунд повторять запрос.
+              schema:
+                type: integer
+                minimum: 1
+        '502':
+          description: Ошибка провайдера. Провайдер модели ответил ошибкой.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '503':
+          description: 'Сервис временно недоступен. Недоступно хранилище счётчиков лимитов (ADR-008).
+            Код именно `503`, а не `429`: последний означал бы «вы превысили лимит» и возлагал причину
+            на абонента, который ни при чём. Заголовок `Retry-After` обязателен.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          headers:
+            Retry-After:
+              description: Через сколько секунд повторять запрос.
+              schema:
+                type: integer
+                minimum: 1
+        '504':
+          description: Таймаут провайдера. Провайдер модели не ответил вовремя.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /v1/healthz:
+    get:
+      tags:
+      - ops
+      summary: Проверка доступности
+      description: 'Без авторизации: проверку выполняет система оркестрации, у которой внутреннего токена
+        нет.'
+      security: []
+      responses:
+        '200':
+          description: Сервис отвечает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required:
+                - status
+components:
+  securitySchemes:
+    InternalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+      description: Внутренний токен. Шлюз доступен только изнутри контура; взаимная проверка сертификатов
+        (mTLS) — дополнительная мера, не замена.
+  schemas:
+    Channel:
+      description: Откуда пришёл запрос (раздел 7.6, пункт 6).
+      enum:
+      - lk_web
+      - lk_mobile
+      title: Channel
+      type: string
+    ContextChunk:
+      additionalProperties: false
+      description: Фрагмент базы знаний, найденный поиском и переданный модели.
+      properties:
+        chunk_id:
+          title: Chunk Id
+          type: string
+        text:
+          title: Text
+          type: string
+        source_title:
+          title: Source Title
+          type: string
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Source Url
+        relevance_score:
+          maximum: 1.0
+          minimum: 0.0
+          title: Relevance Score
+          type: number
+      required:
+      - chunk_id
+      - text
+      - source_title
+      - relevance_score
+      title: ContextChunk
+      type: object
+    DoneEvent:
+      additionalProperties: false
+      properties:
+        event:
+          const: done
+          default: done
+          title: Event
+          type: string
+        finish_reason:
+          $ref: '#/components/schemas/FinishReason'
+          default: stop
+        usage:
+          $ref: '#/components/schemas/Usage'
+        pii_report:
+          $ref: '#/components/schemas/PiiReport'
+        trace_id:
+          title: Trace Id
+          type: string
+      required:
+      - trace_id
+      title: DoneEvent
+      type: object
+    ErrorEvent:
+      additionalProperties: false
+      description: 'Ошибка внутри уже начатого потока.
+
+
+        Схемы у этого события не было (раздел 7.6, пункт 3). Взято то же тело
+
+        RFC 7807, что и у обычной ошибки: два разных формата ошибки на два пути
+
+        пришлось бы поддерживать порознь.'
+      properties:
+        event:
+          const: error
+          default: error
+          title: Event
+          type: string
+        problem:
+          $ref: '#/components/schemas/ProblemDetail'
+      required:
+      - problem
+      title: ErrorEvent
+      type: object
+    FinishReason:
+      description: 'Почему генерация завершилась.
+
+
+        `guardrail` — не из словаря провайдера: так помечается обрыв потока
+
+        синхронной проверкой (раздел 35.1). Без отдельного значения этот случай
+
+        был бы неотличим от нормального завершения в аналитике.'
+      enum:
+      - stop
+      - length
+      - guardrail
+      - error
+      title: FinishReason
+      type: string
+    GenerateRequest:
+      additionalProperties: false
+      description: Запрос к шлюзу (раздел 7.1).
+      properties:
+        system:
+          minLength: 1
+          title: System
+          type: string
+        query:
+          maxLength: 2000
+          minLength: 1
+          title: Query
+          type: string
+        context:
+          items:
+            $ref: '#/components/schemas/ContextChunk'
+          title: Context
+          type: array
+        parameters:
+          $ref: '#/components/schemas/GenerationParameters'
+        metadata:
+          $ref: '#/components/schemas/RequestMetadata'
+      required:
+      - system
+      - query
+      - metadata
+      title: GenerateRequest
+      type: object
+    GenerateResponse:
+      additionalProperties: false
+      description: Ответ шлюза (раздел 7.3) с полями, которых требует DoD раздела 18.
+      properties:
+        answer:
+          title: Answer
+          type: string
+        model:
+          title: Model
+          type: string
+        finish_reason:
+          $ref: '#/components/schemas/FinishReason'
+          default: stop
+        usage:
+          $ref: '#/components/schemas/Usage'
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceRef'
+          title: Sources
+          type: array
+        confidence_score:
+          default: 0.0
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence Score
+          type: number
+        suggested_actions:
+          items:
+            $ref: '#/components/schemas/SuggestedAction'
+          title: Suggested Actions
+          type: array
+        disclaimer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Disclaimer
+        pii_report:
+          $ref: '#/components/schemas/PiiReport'
+        routing:
+          additionalProperties: true
+          title: Routing
+          type: object
+        trace_id:
+          title: Trace Id
+          type: string
+      required:
+      - answer
+      - model
+      - trace_id
+      title: GenerateResponse
+      type: object
+    GenerationParameters:
+      additionalProperties: false
+      properties:
+        model:
+          default: vodokanal-assistant
+          title: Model
+          type: string
+        max_tokens:
+          default: 200
+          maximum: 4096
+          minimum: 1
+          title: Max Tokens
+          type: integer
+        temperature:
+          default: 0.1
+          maximum: 2.0
+          minimum: 0.0
+          title: Temperature
+          type: number
+        stream:
+          default: true
+          title: Stream
+          type: boolean
+      title: GenerationParameters
+      type: object
+    InquiryType:
+      description: 'Канонические коды типов обращений (контекст, раздел 9.3).
+
+
+        `StrEnum`, а не обычный `Enum`: значение должно без преобразований уходить
+
+        в фильтр векторного поиска и в метаданные запроса, где ожидается строка.'
+      enum:
+      - recalculation
+      - meter_verification
+      - reconciliation
+      - contract_signing
+      - contract_termination
+      - debt
+      - water_quality
+      - emergency
+      - tariff_change
+      - other
+      title: InquiryType
+      type: string
+    MetadataEvent:
+      additionalProperties: false
+      description: Источники и оценки — приходят после текста, перед завершением.
+      properties:
+        event:
+          const: metadata
+          default: metadata
+          title: Event
+          type: string
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceRef'
+          title: Sources
+          type: array
+        confidence_score:
+          default: 0.0
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence Score
+          type: number
+        suggested_actions:
+          items:
+            $ref: '#/components/schemas/SuggestedAction'
+          title: Suggested Actions
+          type: array
+        disclaimer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Disclaimer
+      title: MetadataEvent
+      type: object
+    PiiReport:
+      additionalProperties: false
+      description: 'Отчёт об обезличивании — единственное, что разрешено писать в журнал.
+
+
+        Правило 4.2: сами значения персональных данных сюда не попадают ни при
+
+        каких условиях, только перечень типов найденных сущностей.'
+      properties:
+        pii_detected:
+          default: false
+          title: Pii Detected
+          type: boolean
+        entities:
+          items:
+            type: string
+          title: Entities
+          type: array
+      title: PiiReport
+      type: object
+    ProblemDetail:
+      additionalProperties: false
+      description: 'Тело ошибки по RFC 7807 (правило 4.5).
+
+
+        `trace_id` — не из стандарта, но добавлен намеренно: без него жалобу
+
+        абонента невозможно связать с записью в журнале.'
+      properties:
+        type:
+          title: Type
+          type: string
+        title:
+          title: Title
+          type: string
+        status:
+          maximum: 599
+          minimum: 100
+          title: Status
+          type: integer
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Detail
+        instance:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Instance
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Trace Id
+      required:
+      - type
+      - title
+      - status
+      title: ProblemDetail
+      type: object
+    RequestMetadata:
+      additionalProperties: false
+      description: 'Метаданные запроса: аудит, квоты, аналитика (раздел 9.7).'
+      properties:
+        subscriber_id:
+          title: Subscriber Id
+          type: string
+        session_id:
+          title: Session Id
+          type: string
+        channel:
+          $ref: '#/components/schemas/Channel'
+          default: lk_web
+        inquiry_type:
+          anyOf:
+          - $ref: '#/components/schemas/InquiryType'
+          - type: 'null'
+          default: null
+      required:
+      - subscriber_id
+      - session_id
+      title: RequestMetadata
+      type: object
+    SourceRef:
+      additionalProperties: false
+      description: Источник, на котором основан ответ. Показывается абоненту.
+      properties:
+        chunk_id:
+          title: Chunk Id
+          type: string
+        source_title:
+          title: Source Title
+          type: string
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Source Url
+        relevance_score:
+          maximum: 1.0
+          minimum: 0.0
+          title: Relevance Score
+          type: number
+      required:
+      - chunk_id
+      - source_title
+      - relevance_score
+      title: SourceRef
+      type: object
+    SuggestedAction:
+      additionalProperties: false
+      description: Кнопка следующего шага в виджете (раздел 8.4).
+      properties:
+        action:
+          title: Action
+          type: string
+        label:
+          title: Label
+          type: string
+        inquiry_type:
+          anyOf:
+          - $ref: '#/components/schemas/InquiryType'
+          - type: 'null'
+          default: null
+      required:
+      - action
+      - label
+      title: SuggestedAction
+      type: object
+    TokenEvent:
+      additionalProperties: false
+      description: Очередной кусочек ответа.
+      properties:
+        event:
+          const: token
+          default: token
+          title: Event
+          type: string
+        delta:
+          title: Delta
+          type: string
+      required:
+      - delta
+      title: TokenEvent
+      type: object
+    Usage:
+      additionalProperties: false
+      properties:
+        prompt_tokens:
+          default: 0
+          minimum: 0
+          title: Prompt Tokens
+          type: integer
+        completion_tokens:
+          default: 0
+          minimum: 0
+          title: Completion Tokens
+          type: integer
+      title: Usage
+      type: object
+    StreamEvent:
+      description: 'Одно событие потока. Различаются по полю `event`. Ошибка внутри уже начатого потока
+        приходит тем же телом RFC 7807, что и обычная ошибка: два формата на два пути пришлось бы поддерживать
+        порознь.'
+      oneOf:
+      - $ref: '#/components/schemas/TokenEvent'
+      - $ref: '#/components/schemas/MetadataEvent'
+      - $ref: '#/components/schemas/DoneEvent'
+      - $ref: '#/components/schemas/ErrorEvent'
+      discriminator:
+        propertyName: event
