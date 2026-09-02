@@ -196,3 +196,27 @@ def test_стенд_отдаётся_по_корневому_адресу():
 def test_стенд_помечен_как_ненастоящий():
     """Иначе на скриншоте он неотличим от рабочей системы."""
     assert "демо-стенд" in _client().get("/").text
+
+
+def test_битое_тело_даёт_400_а_не_500():
+    """Найдено живым запросом: неверная кодировка давала 500 с трассировкой.
+
+    Проверки этого не ловили — они шлют заведомо корректные тела. Вина за
+    непригодное тело лежит на запросе, и ответ должен это отражать.
+    """
+    response = _client().post(
+        "/v1/generate",
+        content=b'{"query": "\xe1\xe8\xf2\xfb\xe9 \xf2\xe5\xea\xf1\xf2"}',
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith(PROBLEM_JSON)
+
+
+def test_не_json_вовсе_тоже_даёт_400():
+    response = _client().post(
+        "/v1/generate",
+        content="это вообще не json".encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400

@@ -172,6 +172,7 @@ class LlmGateway:
         фрагменты базы знаний в теории могут содержать пример с настоящими
         данными, и правило 4.2 не делает для них исключения.
         """
+        sanitize_started = time.perf_counter()
         clean_query, report = self._sanitizer.sanitize(request.query)
 
         pieces: list[str] = []
@@ -184,6 +185,7 @@ class LlmGateway:
                     entities=sorted(set(report.entities) | set(chunk_report.entities)),
                 )
 
+        metrics.PII_SANITIZE_SECONDS.observe(time.perf_counter() - sanitize_started)
         metrics.record_pii(report.entities)
 
         content = clean_query
@@ -216,6 +218,9 @@ class LlmGateway:
                 "Сервис временно недоступен. Попробуйте повторить запрос позже.",
             )
         if not decision.allowed:
+            metrics.record_quota_rejection(
+                decision.scope.value if decision.scope else "unknown"
+            )
             return self.problem(
                 "quota-exceeded", "Too many requests", 429, trace_id, decision.detail
             )
@@ -303,7 +308,9 @@ class LlmGateway:
             )
 
         answer = _extract_text(raw)
+        check_started = time.perf_counter()
         verdict = self._guardrails.check(answer)
+        metrics.GUARDRAILS_CHECK_SECONDS.observe(time.perf_counter() - check_started)
         metrics.record_guardrail(
             blocked=not verdict.allowed,
             reason=verdict.reason.value if verdict.reason else None,
@@ -311,6 +318,9 @@ class LlmGateway:
         if not verdict.allowed:
             answer = verdict.text_for_subscriber or ""
 
+        metrics.record_provider_used(
+            alias=self._settings.llm_provider, model=str(getattr(raw, "model", ""))
+        )
         usage = _extract_usage(raw)
         metrics.record_tokens(
             prompt=usage.prompt_tokens, completion=usage.completion_tokens
@@ -382,8 +392,11 @@ class LlmGateway:
         guard = StreamGuard(guardrails=self._guardrails)
         blocked = False
         first_delta_at: float | None = None
+        answering_model = ""
 
         async for piece in raw_stream:
+            if not answering_model:
+                answering_model = str(getattr(piece, "model", ""))
             delta = _extract_delta(piece)
             if not delta:
                 continue
@@ -399,6 +412,10 @@ class LlmGateway:
                 break
             yield TokenEvent(delta=delta)
 
+        if answering_model:
+            metrics.record_provider_used(
+                alias=self._settings.llm_provider, model=answering_model
+            )
         metrics.record_guardrail(
             blocked=blocked,
             reason=guard.verdict.reason.value if guard.verdict.reason else None,

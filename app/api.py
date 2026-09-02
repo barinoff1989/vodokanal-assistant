@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app.gateway.llm_gateway import LlmGateway
+from app.metrics import prometheus as metrics
 from app.models import (
     DoneEvent,
     ErrorEvent,
@@ -100,6 +101,23 @@ def create_app(gateway: LlmGateway | None = None) -> FastAPI:
         title="AI-помощник абонента водоканала", version="1.0.0", lifespan=lifespan
     )
 
+    @app.middleware("http")
+    async def count_responses(request: Request, call_next: Any) -> Any:
+        """Считать ответы интерфейса по кодам.
+
+        Метрика была объявлена и не записывалась ничем — виджет доли ошибок в
+        дашборде остался бы пустым. Это зеркало той же болезни, что виджет без
+        метрики, и заметить её так же трудно.
+
+        Берётся шаблон адреса, а не фактический путь: иначе каждый запрос с
+        разными параметрами создавал бы свой временной ряд.
+        """
+        response = await call_next(request)
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
+        metrics.record_http(path=path, status=response.status_code)
+        return response
+
     @app.get("/v1/healthz")
     async def healthz() -> dict[str, str]:
         """Проверка доступности. Без авторизации — так задано контрактом (7.5)."""
@@ -108,7 +126,23 @@ def create_app(gateway: LlmGateway | None = None) -> FastAPI:
     @app.post("/v1/generate")
     async def generate(request: Request) -> Any:
         """Основной путь абонента. По умолчанию отдаёт поток (правило 4.3)."""
-        body = await request.json()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 — важен факт непригодного тела, не причина
+            # Битый JSON или неверная кодировка — вина запроса, а не сервиса.
+            # Без этой ветки клиент получал 500 с трассировкой: живой запрос в
+            # неверной кодировке это и вскрыл, а проверки не поймали — они шлют
+            # заведомо корректные тела.
+            return _problem_response(
+                ProblemDetail(
+                    type="https://vodokanal.example/errors/invalid-request",
+                    title="Invalid request",
+                    status=400,
+                    detail="Тело запроса не является корректным JSON в кодировке UTF-8.",
+                    instance="/v1/generate",
+                )
+            )
+
         try:
             parsed = GenerateRequest.model_validate(body)
         except ValidationError as exc:

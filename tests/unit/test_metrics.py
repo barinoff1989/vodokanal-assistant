@@ -209,3 +209,26 @@ def test_метрика_поиска_объявлена_заранее():
     Без объявления запрос вернул бы пустоту, неотличимую от «очередь пуста».
     """
     assert REGISTRY.get_sample_value("vector_db_pending_queries") == 0.0
+
+
+def test_у_каждой_метрики_есть_виджет():
+    """Обратная проверка: метрика без виджета — тот же дефект с другой стороны.
+
+    Первый тест сторожит «виджет ссылается на несуществующую метрику». Этот —
+    «метрику собираем, но никому не показываем». Без обеих сторон связь
+    односторонняя, и половина расхождений остаётся невидимой.
+    """
+    if not DASHBOARD.is_file():
+        pytest.skip("спецификация дашборда не найдена")
+    text = DASHBOARD.read_text(encoding="utf-8")
+
+    declared = {
+        metric.name
+        for metric in REGISTRY.collect()
+        if metric.name.startswith(
+            ("assistant_", "guardrails_", "llm_", "pii_", "vector_db_", "http_", "quota_")
+        )
+    }
+
+    missing = {name for name in declared if name not in text}
+    assert not missing, f"метрики собираются, но не показаны на дашборде: {sorted(missing)}"
