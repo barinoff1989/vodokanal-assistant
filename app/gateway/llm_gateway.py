@@ -120,6 +120,7 @@ class LlmGateway:
         )
         self._quota = quota
         self._completion = completion
+        self._router_instance: Any = None
 
     def warmup(self) -> None:
         """Прогреть тяжёлые зависимости до первого запроса абонента.
@@ -140,9 +141,10 @@ class LlmGateway:
         """
         self._sanitizer.sanitize("прогрев")
         if self._completion is None:
-            # Импорт, а не вызов: тратить токены на прогрев незачем, а семь
-            # секунд уходило именно на разбор библиотеки.
-            import litellm  # noqa: F401
+            # Сборка маршрутизатора, а не вызов модели: тратить токены на прогрев
+            # незачем, а семь секунд уходило именно на разбор библиотеки, который
+            # здесь и происходит.
+            self._router()
 
     # -- вспомогательное ------------------------------------------------------ #
 
@@ -244,50 +246,36 @@ class LlmGateway:
         stream: bool,
     ) -> Any:
         """Обратиться к модели через LiteLLM либо через подменённую функцию."""
-        completion = self._completion
-        if completion is None:
-            from litellm import acompletion
+        if self._completion is not None:
+            return await self._completion(
+                model=self._settings.llm_provider,
+                messages=messages,
+                max_tokens=request.parameters.max_tokens,
+                temperature=request.parameters.temperature,
+                stream=stream,
+            )
 
-            completion = acompletion
-
-        return await completion(
+        return await self._router().acompletion(
+            model=self._settings.llm_provider,
             messages=messages,
             max_tokens=request.parameters.max_tokens,
             temperature=request.parameters.temperature,
             stream=stream,
-            **self._provider_params(),
         )
 
-    def _provider_params(self) -> dict[str, Any]:
-        """Расшифровать псевдоним провайдера в параметры вызова.
+    def _router(self) -> Any:
+        """Маршрутизатор по конфигурации. Собирается один раз за жизнь шлюза.
 
-        Псевдонимы (`local-test`, `yandexgpt`, `gigachat`) описаны и в
-        `litellm_config.yaml`, но эту подстановку выполняет только прокси
-        LiteLLM, которого в прототипе нет: мы обращаемся к `acompletion`
-        напрямую. Живой вызов это и вскрыл — псевдоним уходил провайдеру как
-        имя модели и не распознавался.
-
-        > **[ИЗВЕСТНОЕ ДУБЛИРОВАНИЕ]** Пока прокси не введён, `litellm_config.yaml`
-        > остаётся описанием, а рабочий источник — этот метод. Когда прокси
-        > появится, всё наоборот: конфигурация станет живой, а метод исчезнет.
-        > Владелец значений — `app/config.py`, чтобы расхождение не завелось
-        > в третьем месте.
+        Псевдоним провайдера (`local-test`, `yandexgpt`, `gigachat`) расшифровывает
+        сама конфигурация — теперь она читается, а не лежит описанием. Отсюда же
+        берутся цепочки запасных провайдеров: требование ADR-002 о переключении
+        при сбое исполняется, а не только описано.
         """
-        settings = self._settings
-        alias = settings.llm_provider
+        if self._router_instance is None:
+            from app.gateway.model_router import build_router
 
-        if alias == "yandexgpt":
-            return {
-                "model": settings.yandex_model,
-                "api_base": settings.yandex_api_base,
-                "api_key": settings.yandex_api_key,
-            }
-        if alias == "gigachat":
-            return {"model": "gigachat/GigaChat-Pro"}
-        return {
-            "model": f"ollama_chat/{settings.local_model}",
-            "api_base": settings.ollama_base_url,
-        }
+            self._router_instance = build_router(self._settings)
+        return self._router_instance
 
     # -- ответ целиком --------------------------------------------------------- #
 
