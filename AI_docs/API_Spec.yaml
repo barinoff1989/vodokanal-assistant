@@ -225,6 +225,10 @@ components:
           $ref: '#/components/schemas/Usage'
         pii_report:
           $ref: '#/components/schemas/PiiReport'
+        routing:
+          additionalProperties: true
+          title: Routing
+          type: object
         trace_id:
           title: Trace Id
           type: string

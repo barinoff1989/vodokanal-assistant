@@ -56,6 +56,7 @@ const ui = {
   confirmNo: el("confirm-no"),
   trace: el("m-trace"),
   pii: el("m-pii"),
+  model: el("m-model"),
   finish: el("m-finish"),
   tokens: el("m-tokens"),
   ttft: el("m-ttft"),
@@ -177,6 +178,7 @@ async function ask(question) {
   ui.send.disabled = true;
   ui.trace.textContent = "—";
   ui.pii.textContent = "—";
+  ui.model.textContent = "—";
   ui.finish.textContent = "—";
   ui.ttft.textContent = "—";
 
@@ -243,6 +245,18 @@ async function ask(question) {
           ui.finish.textContent = event.data.finish_reason || "—";
           if (event.data.finish_reason === "guardrail") {
             ui.finish.classList.add("alarm");
+          }
+          // Псевдоним провайдера против фактически ответившей модели: их
+          // расхождение и есть срабатывание запасного провайдера.
+          const routing = event.data.routing || {};
+          if (routing.model) {
+            // Имя модели у Яндекса — путь вида gpt://<каталог>/yandexgpt/latest;
+            // осмысленны последние два звена, а не только хвост «latest».
+            const parts = String(routing.model).split("/").filter(Boolean);
+            const short = parts.slice(-2).join("/");
+            const switched = routing.provider && !String(routing.model).includes(routing.provider);
+            ui.model.textContent = switched ? short + " (запасной)" : short;
+            if (switched) ui.model.classList.add("alarm");
           }
           const pii = event.data.pii_report || {};
           ui.pii.textContent = pii.pii_detected

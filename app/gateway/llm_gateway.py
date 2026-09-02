@@ -333,7 +333,10 @@ class LlmGateway:
             usage=usage,
             sources=self._sources(request),
             pii_report=report,
-            routing={"provider": self._settings.llm_provider},
+            routing={
+                "provider": self._settings.llm_provider,
+                "model": str(getattr(raw, "model", "")),
+            },
             trace_id=trace_id,
         )
 
@@ -433,6 +436,10 @@ class LlmGateway:
             finish_reason=FinishReason.GUARDRAIL if blocked else FinishReason.STOP,
             usage=Usage(),
             pii_report=report,
+            routing={
+                "provider": self._settings.llm_provider,
+                "model": answering_model,
+            },
             trace_id=trace_id,
         )
 
