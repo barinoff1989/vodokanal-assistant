@@ -212,3 +212,40 @@ def test_каждое_состояние_достижимо():
                 reachable.add(target)
                 frontier.append(target)
     assert reachable == set(InquiryState)
+
+
+# --- ADR-010: подтверждение решения -------------------------------------------- #
+
+
+def test_автомат_не_имеет_внешних_зависимостей():
+    """Пункт 1 подтверждения ADR-010: проверяется составом импортов.
+
+    Соглашение «не добавлять зависимость» однажды нарушат — импорт увидит тест.
+    """
+    import ast
+    import pathlib
+
+    module = pathlib.Path(__file__).resolve().parents[2] / "app" / "fsm.py"
+    tree = ast.parse(module.read_text(encoding="utf-8"))
+
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+
+    allowed = {"__future__", "enum", "app"}
+    assert imported <= allowed, f"появились сторонние зависимости: {imported - allowed}"
+
+
+def test_состав_переходов_зафиксирован():
+    """Пункт 4 подтверждения ADR-010.
+
+    При миграции на другой исполнитель состав переходов обязан сохраниться:
+    таблица — формулировка правила 4.7, а не деталь реализации. Число здесь
+    сторожит не арифметику, а то, что переходы не добавили и не убрали молча.
+    """
+    assert len(TRANSITIONS) == 10
+    assert len(InquiryState) == 7
+    assert len(InquiryEvent) == 7
