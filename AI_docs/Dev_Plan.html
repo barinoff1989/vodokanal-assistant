@@ -359,9 +359,10 @@
     <h2>5. Шаги разработки — основание системы</h2>
 
     <div class="note">
-      <b>Состояние на 1 сентября 2026: закрыто пять шагов из четырнадцати.</b>
+      <b>Состояние на 1 сентября 2026: закрыто семь шагов из четырнадцати.</b>
       Репозиторий — <code>github.com/barinoff1989/vodokanal-assistant</code>,
-      206 тестов проходят, линтер и проверка типов чисты.
+      220 тестов проходят, линтер и проверка типов чисты. Сквозной путь работает:
+      страница → API → шлюз → настоящий провайдер → охранители → поток обратно.
     </div>
 
     <div class="table-wrap">
@@ -407,10 +408,17 @@
             настоящем YandexGPT проходит</td>
           </tr>
           <tr>
-            <td class="name">5–11 — поиск, агенты, API, стенд, наблюдаемость</td>
+            <td class="name">8 и 8.5 — HTTP-интерфейс и демо-стенд</td>
+            <td><span class="pill good">готово</span></td>
+            <td>Два адреса по правилу 4.4, поток SSE, ошибки RFC 7807. Стенд вскрыл три
+            дефекта, невидимых тестам: внутренний текст ошибки у абонента, восемь секунд
+            до первого куска из-за ленивых загрузок, потерянный отчёт об обезличивании</td>
+          </tr>
+          <tr>
+            <td class="name">5, 6, 7, 9, 10, 11 — поиск, агенты, оркестрация, адаптеры</td>
             <td><span class="pill">не начаты</span></td>
             <td>Шаг 5 упирается в тот же блокер, что и шаг 0: индексировать нечего,
-            пока нет образцов документов базы знаний</td>
+            пока нет образцов документов базы знаний. Шаги 6 и 7 строятся поверх поиска</td>
           </tr>
         </tbody>
       </table>
@@ -668,7 +676,7 @@
     </div>
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 8</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">API и потоковая отдача</span><span class="stime">1–3 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 8</span><span class="sstatus done">ГОТОВО</span><span class="stitle">API и потоковая отдача</span><span class="stime">1–3 ч</span></div>
       <div class="sfiles">app/api.py · app/main.py</div>
       <div class="sgoal">Публикация наружу по контракту: два endpoint'а, настоящий поток вместо имитации, ошибки в стандартном формате.</div>
 
@@ -693,7 +701,7 @@
 
 
     <div class="step">
-      <div class="shead"><span class="snum">ШАГ 8.5</span><span class="sstatus pending">НЕ НАЧАТ</span><span class="stitle">Демо-стенд вместо личного кабинета</span><span class="stime">3–5 ч</span></div>
+      <div class="shead"><span class="snum">ШАГ 8.5</span><span class="sstatus done">ГОТОВО</span><span class="stitle">Демо-стенд вместо личного кабинета</span><span class="stime">3–5 ч</span></div>
       <div class="sfiles">web/index.html · web/app.js · web/style.css — отдаются статикой самим сервисом</div>
       <div class="sgoal">Доступа к настоящему личному кабинету на прототипе не будет, а показывать систему как-то нужно. Одна страница, имитирующая кабинет: выбор абонента, его лицевой счёт и баланс из синтетики, под ними — виджет диалога.</div>
 
