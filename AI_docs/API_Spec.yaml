@@ -380,23 +380,33 @@ components:
       title: GenerationParameters
       type: object
     InquiryType:
-      description: 'Канонические коды типов обращений (контекст, раздел 9.3).
+      description: 'Во что регистрируется обращение (ADR-011, регистрационная ось).
+
+
+        Шестнадцать значений реального справочника плюс :attr:`EMERGENCY`.
 
 
         `StrEnum`, а не обычный `Enum`: значение должно без преобразований уходить
 
-        в фильтр векторного поиска и в метаданные запроса, где ожидается строка.'
+        в метаданные запроса и в вызов чужого API, где ожидается строка.'
       enum:
-      - recalculation
-      - meter_verification
-      - reconciliation
-      - contract_signing
-      - contract_termination
+      - refund
       - debt
-      - water_quality
-      - emergency
-      - tariff_change
+      - inspection
+      - payment
+      - meter_sealing
+      - penalty
+      - meter_unsealing
+      - certificate
+      - meter_verification
+      - document_submission
+      - accrual_recalculation
+      - meter_installation
+      - inquiry_cancellation
+      - meter_reacceptance
+      - meter_reacceptance_auto
       - other
+      - emergency
       title: InquiryType
       type: string
     MetadataEvent:

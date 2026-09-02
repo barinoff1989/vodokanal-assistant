@@ -99,7 +99,7 @@ def test_тип_обращения_нормализуется_при_разбо�
 
 
 def test_значение_прошлой_версии_переводится():
-    assert _metadata(inquiry_type="перерасчёт ").inquiry_type is InquiryType.RECALCULATION
+    assert _metadata(inquiry_type="перерасчёт ").inquiry_type is InquiryType.ACCRUAL_RECALCULATION
 
 
 def test_тип_обращения_необязателен_до_классификации():

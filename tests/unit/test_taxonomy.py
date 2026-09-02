@@ -13,11 +13,17 @@ from app.taxonomy import (
     DISPLAY_NAMES,
     KEYWORDS,
     LEGACY_ALIASES,
+    SYNTHETIC_CODES,
+    TOPIC_DISPLAY_NAMES,
     InquiryType,
+    Topic,
     UnknownInquiryTypeError,
+    UnknownTopicError,
     coerce,
+    coerce_topic,
     display_name,
     parse,
+    parse_topic,
 )
 
 # --- целостность самого справочника ---------------------------------------- #
@@ -71,15 +77,15 @@ def test_псевдонимы_нормализованы_и_ведут_к_сущ
 @pytest.mark.parametrize(
     "raw",
     [
-        "recalculation",
-        "  recalculation  ",  # хвостовые пробелы, раздел 11.1
-        "RECALCULATION",
-        "\tRecalculation\n",
+        "accrual_recalculation",
+        "  accrual_recalculation  ",  # хвостовые пробелы, раздел 11.1
+        "ACCRUAL_RECALCULATION",
+        "\tAccrual_Recalculation\n",
     ],
 )
 def test_пробелы_и_регистр_не_мешают_разбору(raw: str):
     """Главный дефект прототипа: 'перерасчёт ' с пробелом ломал фильтр молча."""
-    assert parse(raw) is InquiryType.RECALCULATION
+    assert parse(raw) is InquiryType.ACCRUAL_RECALCULATION
 
 
 def test_значение_с_пробелом_равно_значению_без_него():
@@ -90,12 +96,14 @@ def test_значение_с_пробелом_равно_значению_без
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("перерасчёт ", InquiryType.RECALCULATION),  # раздел 11.1
-        ("перерасчет", InquiryType.RECALCULATION),  # без буквы ё
+        ("перерасчёт ", InquiryType.ACCRUAL_RECALCULATION),  # раздел 11.1
+        ("перерасчет", InquiryType.ACCRUAL_RECALCULATION),  # без буквы ё
         ("поверка_счётчика ", InquiryType.METER_VERIFICATION),
         ("задолженность", InquiryType.DEBT),
         ("prochee", InquiryType.OTHER),  # раздел 11.8
         ("Прочее", InquiryType.OTHER),
+        # Код версии 4.20: название реального типа шире перерасчёта.
+        ("recalculation", InquiryType.ACCRUAL_RECALCULATION),
     ],
 )
 def test_значения_прошлых_версий_переводятся(raw: str, expected: InquiryType):
@@ -162,6 +170,122 @@ def test_код_уходит_в_фильтр_без_преобразований
     `StrEnum` даёт равенство со строкой, поэтому код можно класть в метаданные
     и в условие поиска как есть.
     """
-    metadata = {"inquiry_type": InquiryType.RECALCULATION}
-    assert metadata["inquiry_type"] == "recalculation"
-    assert f"{InquiryType.RECALCULATION}" == "recalculation"
+    metadata = {"inquiry_type": InquiryType.ACCRUAL_RECALCULATION}
+    assert metadata["inquiry_type"] == "accrual_recalculation"
+    assert f"{InquiryType.ACCRUAL_RECALCULATION}" == "accrual_recalculation"
+
+
+# --- состав справочника (ADR-011) -------------------------------------------- #
+
+
+REFERENCE_NAMES = (
+    "Возврат денежных средств",
+    "Задолженность",
+    "Обследование",
+    "Оплата",
+    "Заказать опломбировку",
+    "Пени",
+    "Снятие пломбы",
+    "Справка",
+    "Заказать поверку",
+    "Направить документы",
+    "Начисления/Перерасчет",
+    "Заказать установку прибора учета",
+    "Отмена обращения",
+    "Другое",
+    "Повторная приемка узла учета воды в эксплуатацию (без авто)",
+    "Повторная приемка узла учета воды в эксплуатацию (с авто)",
+)
+"""Справочник владельца системы обращений, дословно. Шестнадцать типов."""
+
+
+def test_справочник_воспроизведён_дословно():
+    """Сторожит не арифметику, а то, что типы не добавили и не убрали молча.
+
+    Число уже один раз оказалось не тем, каким его считали: по присланному
+    списку названий типов было тринадцать, а в выгрузке нашлось шестнадцать —
+    «Другое» и обе «Повторные приемки» в список не попали.
+    """
+    ours = {DISPLAY_NAMES[code] for code in InquiryType if code is not InquiryType.EMERGENCY}
+    assert ours == set(REFERENCE_NAMES)
+
+
+def test_авария_единственный_код_сверх_справочника():
+    """Аварий в справочнике нет — подтверждено владельцем (ADR-009).
+
+    Код существует, потому что заявка регистрируется в Диспетчерской, и
+    адаптеру нужно что-то отклонять. Появление здесь второго кода означает,
+    что кто-то расширил регистрационную ось без решения.
+    """
+    beyond = {c for c in InquiryType if DISPLAY_NAMES[c] not in REFERENCE_NAMES}
+    assert beyond == {InquiryType.EMERGENCY}
+
+
+def test_все_коды_справочника_помечены_синтетическими():
+    """Пока владелец не прислал настоящие коды, каждый из них — наш.
+
+    Без пометки синтетический код однажды примут за настоящий при
+    согласовании — та же ошибка, что недостоверные цифры раздела 26.4.
+    """
+    assert set(InquiryType) - {InquiryType.EMERGENCY} == SYNTHETIC_CODES
+
+
+def test_название_с_хвостовым_пробелом_разбирается():
+    """Не гипотеза: в выгрузке владельца у этого типа хвостовой пробел.
+
+    Дефект 11.1 сломал прототип и живёт в данных реальной системы прямо
+    сейчас. Нормализация на входе обязательна.
+    """
+    raw = "Повторная приемка узла учета воды в эксплуатацию (без авто) "
+    assert parse(raw) is InquiryType.METER_REACCEPTANCE
+
+
+def test_две_приемки_различаются():
+    """«С авто» и «без авто» — разные типы справочника.
+
+    Что означают суффиксы, неизвестно (пункт 41 TODO), но схлопывать их в один
+    код нельзя: владелец ведёт их порознь.
+    """
+    assert InquiryType.METER_REACCEPTANCE is not InquiryType.METER_REACCEPTANCE_AUTO
+
+
+# --- несравнимость осей (ADR-011) -------------------------------------------- #
+
+
+def test_значения_осей_не_пересекаются():
+    """Главная защита от возврата дефекта 11.1 в новом виде.
+
+    Оси описывают разное: во что регистрируют и о чём спрашивают. Пересечение
+    значений позволило бы сравнить их между собой, и сравнение прошло бы
+    молча — ровно так прототип и ломался.
+    """
+    assert {c.value for c in InquiryType}.isdisjoint({t.value for t in Topic})
+
+
+def test_тема_не_разбирается_как_тип_обращения():
+    """И наоборот. Перепутанная ось должна давать ошибку, а не тихий результат."""
+    with pytest.raises(UnknownInquiryTypeError):
+        parse(Topic.OUTAGE.value)
+    with pytest.raises(UnknownTopicError):
+        parse_topic(InquiryType.DEBT.value)
+
+
+def test_у_каждой_темы_есть_название():
+    assert set(TOPIC_DISPLAY_NAMES) == set(Topic)
+
+
+def test_мягкий_разбор_темы_даёт_обычный_путь():
+    """Тема без особого пути ответа отвечается по базе знаний."""
+    assert coerce_topic("выдуманная_тема") is Topic.GENERAL
+    assert coerce_topic(None) is Topic.GENERAL
+
+
+def test_разбор_темы_терпит_пробелы_и_регистр():
+    assert parse_topic("  OUTAGE  ") is Topic.OUTAGE
+
+
+def test_коды_тем_машиночитаемы():
+    for topic in Topic:
+        assert topic.value == topic.value.strip().lower()
+        assert " " not in topic.value
+        assert topic.value.isascii()
