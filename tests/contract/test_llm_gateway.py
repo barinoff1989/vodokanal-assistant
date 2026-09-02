@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.gateway.guardrails import SAFE_FALLBACK, SyncGuardrails
@@ -357,3 +358,94 @@ async def test_живой_вызов_яндекса():
     assert not errors, errors[0].problem if errors else None
     tokens = [e for e in events if isinstance(e, TokenEvent)]
     assert len(tokens) > 1, "ответ пришёл одним куском — это не поток"
+
+
+# --- находки живых проверок: защита от возврата ---------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError(
+            "litellm.APIConnectionError: Ollama_chatException - Cannot connect to host "
+            "localhost:11434 ssl:<ssl.SSLContext object at 0x0000021CF65B55D0>"
+        ),
+        ProviderTimeoutError("HTTPSConnectionPool(host='llm.api.cloud.yandex.net', port=443)"),
+    ],
+)
+async def test_внутренний_текст_ошибки_не_доходит_до_абонента(failure: Exception):
+    """Найдено живой проверкой: абоненту показывался адрес, порт и адрес объекта
+    в памяти. И непонятно, и раскрывает устройство системы.
+
+    Существующая проверка сообщения касалась отказа хранилища лимитов (503);
+    ошибки провайдера (502 и 504) оставались незащищёнными.
+    """
+    gateway = _gateway(completion=failing_completion(failure))
+    problem = await gateway.generate(_request())
+
+    assert isinstance(problem, ProblemDetail)
+    detail = (problem.detail or "").lower()
+    for internal in ("localhost", "sslcontext", "litellm", "0x0000", "port=443", "host="):
+        assert internal not in detail, f"внутренняя подробность в тексте: {internal}"
+    assert "недоступен" in detail
+
+
+async def test_внутренний_текст_не_доходит_и_в_потоке():
+    """Тот же путь, второй режим: ошибка внутри уже начатого потока."""
+    gateway = _gateway(
+        completion=failing_completion(RuntimeError("Cannot connect to host localhost:11434"))
+    )
+    events = await _collect(gateway, _request())
+    errors = [e for e in events if isinstance(e, ErrorEvent)]
+    assert errors
+    assert "localhost" not in (errors[0].problem.detail or "").lower()
+
+
+def test_прогрев_поднимает_тяжёлые_зависимости():
+    """Найдено живой проверкой: восемь секунд до первого куска ответа.
+
+    Семь из них — ленивый импорт библиотеки внутри первого запроса, ещё четыре —
+    загрузка языковой модели. Обе платил первый абонент.
+
+    Проверяется сам факт прогрева, а не его длительность: время зависит от машины,
+    и порог сделал бы проверку хрупкой. Важно, что метод есть и отрабатывает без
+    обращения к модели — тратить токены на прогрев незачем.
+    """
+    calls: list[int] = []
+
+    async def counting(**kwargs: Any) -> Any:
+        calls.append(1)
+        return _Response("ответ")
+
+    gateway = _gateway(completion=counting)
+    gateway.warmup()
+
+    assert calls == [], "прогрев не должен обращаться к модели"
+
+
+def test_интерфейс_прогревает_шлюз_при_запуске():
+    """Прогрев бесполезен, если его никто не вызывает.
+
+    Без этой проверки метод остался бы написанным и не подключённым — а именно
+    так и выглядела ошибка до находки.
+    """
+    from app.api import create_app
+
+    warmed: list[str] = []
+
+    class TrackingGateway:
+        """Минимальная заглушка: важен только вызов прогрева при запуске."""
+
+        def warmup(self) -> None:
+            warmed.append("да")
+
+        async def generate(self, request: GenerateRequest) -> Any:
+            return GenerateResponse(answer="", model="m", trace_id="t")
+
+        async def stream(self, request: GenerateRequest) -> AsyncIterator[Any]:
+            yield DoneEvent(trace_id="t")
+
+    with TestClient(create_app(TrackingGateway())):
+        pass
+
+    assert warmed == ["да"], "приложение не прогрело шлюз при запуске"
