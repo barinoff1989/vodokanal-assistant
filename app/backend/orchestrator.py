@@ -43,6 +43,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from app.agents.advisor import Advisor
+from app.agents.triage import Triage
 from app.config import Settings, get_settings
 from app.gateway.llm_gateway import GatewayEvent, LlmGateway
 from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
@@ -104,6 +106,8 @@ class Orchestrator:
         knowledge_base: KnowledgeBase | None = None,
         direct: tuple[DirectResponder, ...] = (),
         quota: QuotaManager | None = None,
+        triage: Triage | None = None,
+        advisor: Advisor | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._gateway = gateway
@@ -111,8 +115,40 @@ class Orchestrator:
         self._direct = direct
         self._quota = quota
         self._settings = settings if settings is not None else get_settings()
+        self._triage = triage if triage is not None else Triage()
+        self._advisor = (
+            advisor
+            if advisor is not None
+            else Advisor(contact_phone=self._settings.contact_center_phone)
+        )
 
     # --- выбор пути ------------------------------------------------------- #
+
+    def _triaged(self, request: GenerateRequest) -> GenerateRequest:
+        """Проставить тему и тип обращения, если их не проставили снаружи.
+
+        Классификация идёт **до** выбора пути: тема решает, звать ли модель
+        вообще, и узнавать её после вызова было бы поздно.
+
+        Результат кладётся в метаданные запроса, а не остаётся у оркестратора:
+        по ним ответчики решают, их ли это случай, и по ним же разбиваются
+        метрики. Второе место хранения того же значения развело бы их при первой
+        правке.
+        """
+        result = self._triage.classify(
+            request.query,
+            topic=request.metadata.topic,
+            inquiry_type=request.metadata.inquiry_type,
+        )
+        if (
+            request.metadata.topic is result.topic
+            and request.metadata.inquiry_type is result.inquiry_type
+        ):
+            return request
+        metadata = request.metadata.model_copy(
+            update={"topic": result.topic, "inquiry_type": result.inquiry_type}
+        )
+        return request.model_copy(update={"metadata": metadata})
 
     def _direct_answer(self, request: GenerateRequest) -> DirectAnswer | None:
         now = datetime.now()
@@ -187,29 +223,72 @@ class Orchestrator:
             logger.info("контекст не найден выше порога: %s", self._settings.score_threshold)
         return request.model_copy(update={"context": chunks})
 
+    def _advice(self, request: GenerateRequest) -> DirectAnswer | None:
+        """Есть ли на чём отвечать. ``None`` — контекст есть, идём к модели.
+
+        Требование шага 6 плана: при пустом контексте генерация не вызывается.
+        Модель без контекста не молчит — она отвечает связно, уверенно и на
+        общих сведениях, которых в регламентах водоканала может не быть вовсе.
+        Отличить такой ответ от настоящего не сможет ни абонент, ни мы.
+
+        **Правило применяется, только если поиск состоялся.** Пустой контекст —
+        свидетельство промаха поиска, а не его отсутствия: когда база знаний не
+        настроена, отказывать было бы не на что опереться, и ассистент молчал бы
+        на любой вопрос.
+
+        Это осознанная дыра, и она видна: `app/main.py` при отсутствии корпуса
+        пишет предупреждение в журнал. На MVP так работать нельзя — там пустая
+        база знаний должна ронять запуск, а не понижать качество молча.
+        """
+        if self._kb is None:
+            return None
+        advice = self._advisor.advise(request.context)
+        if advice.answer is None:
+            return None
+        return DirectAnswer(text=advice.answer)
+
     # --- пути ответа ------------------------------------------------------- #
+
+    def _route(self, request: GenerateRequest) -> tuple[GenerateRequest, DirectAnswer | None]:
+        """Пройти путь до решения: классификация, ответчики, поиск, консультант.
+
+        Возвращает подготовленный запрос и готовый ответ, если модель не нужна.
+        Порядок здесь и есть устройство Backend, поэтому он собран в одном месте,
+        а не размазан по двум точкам входа: поток и ответ целиком обязаны
+        принимать одинаковые решения.
+        """
+        request = self._triaged(request)
+
+        if (answer := self._direct_answer(request)) is not None:
+            return request, answer
+
+        request = self._with_context(request)
+        return request, self._advice(request)
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse | ProblemDetail:
         """Ответ целиком. Для служебных вызовов, не для пути абонента."""
-        if (answer := self._direct_answer(request)) is not None:
-            trace_id = self._gateway.new_trace_id()
-            if (problem := self._quota_problem(request, trace_id)) is not None:
-                return problem
-            return GenerateResponse(
-                answer=answer.text,
-                model="direct",
-                confidence_score=1.0,
-                disclaimer=answer.disclaimer,
-                trace_id=trace_id,
-                routing={"path": "direct"},
-            )
-        return await self._gateway.generate(self._with_context(request))
+        request, answer = self._route(request)
+        if answer is None:
+            return await self._gateway.generate(request)
+
+        trace_id = self._gateway.new_trace_id()
+        if (problem := self._quota_problem(request, trace_id)) is not None:
+            return problem
+        return GenerateResponse(
+            answer=answer.text,
+            model="direct",
+            confidence_score=1.0,
+            disclaimer=answer.disclaimer,
+            trace_id=trace_id,
+            routing={"path": "direct"},
+        )
 
     async def stream(self, request: GenerateRequest) -> AsyncIterator[GatewayEvent]:
         """Ответ потоком — основной путь абонента (правило 4.3)."""
         started = time.perf_counter()
+        request, answer = self._route(request)
 
-        if (answer := self._direct_answer(request)) is not None:
+        if answer is not None:
             trace_id = self._gateway.new_trace_id()
             if (problem := self._quota_problem(request, trace_id)) is not None:
                 yield ErrorEvent(problem=problem)
@@ -232,5 +311,5 @@ class Orchestrator:
             )
             return
 
-        async for event in self._gateway.stream(self._with_context(request)):
+        async for event in self._gateway.stream(request):
             yield event
