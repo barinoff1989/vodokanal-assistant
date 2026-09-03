@@ -36,9 +36,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Protocol
+from typing import Any
 
 from app.config import Settings, get_settings
 from app.gateway.guardrails import StreamGuard, SyncGuardrails
@@ -61,8 +59,6 @@ from app.models import (
 
 __all__ = [
     "ERROR_BASE",
-    "DirectAnswer",
-    "DirectResponder",
     "GatewayEvent",
     "LlmGateway",
     "ProviderError",
@@ -85,34 +81,6 @@ ERROR_BASE = "https://vodokanal.example/errors"
 GatewayEvent = TokenEvent | MetadataEvent | DoneEvent | ErrorEvent
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class DirectAnswer:
-    """Готовый ответ, для которого модель не нужна.
-
-    Два случая обходят генерацию по противоположным причинам: график отключений
-    меняется постоянно и требует точности (ADR-013), утверждённая формулировка о
-    качестве воды не меняется вовсе (ADR-012). Общее у них то, что обоим нужен
-    поиск по ключу, а не по смыслу.
-    """
-
-    text: str
-    disclaimer: str | None = None
-
-
-class DirectResponder(Protocol):
-    """Тот, кто умеет ответить без модели.
-
-    Шлюз знает только это — не про водоканал, не про адреса и не про
-    отключения. Предметная логика живёт в своём модуле и внедряется снаружи,
-    иначе утверждение из описания шлюза перестало бы быть правдой при первой же
-    теме.
-    """
-
-    def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer | None:
-        """``None`` — «не мой случай», запрос идёт обычным путём."""
-        ...
 
 
 class ProviderError(RuntimeError):
@@ -143,11 +111,9 @@ class LlmGateway:
         sanitizer: PiiSanitizer | None = None,
         guardrails: SyncGuardrails | None = None,
         completion: Callable[..., Awaitable[Any]] | None = None,
-        direct: DirectResponder | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._settings = settings if settings is not None else get_settings()
-        self._direct = direct
         self._sanitizer = sanitizer if sanitizer is not None else PiiSanitizer()
         self._guardrails = (
             guardrails if guardrails is not None else SyncGuardrails(sanitizer=self._sanitizer)
@@ -331,35 +297,12 @@ class LlmGateway:
 
     # -- ответ целиком --------------------------------------------------------- #
 
-    def _direct_answer(self, request: GenerateRequest) -> DirectAnswer | None:
-        """Спросить прямого ответчика — до обезличивания и до модели.
-
-        Порядок: лимиты остаются первыми (раздел 41.3), иначе появился бы путь
-        в обход них, которым можно давить сервис бесплатно. Обезличивание
-        пропускается осознанно: наружу ничего не уходит, защищать нечего.
-        Охранители к готовому ответу тоже не применяются — они проверяют то,
-        что сочинила модель, а здесь сочинять было некому.
-        """
-        if self._direct is None:
-            return None
-        return self._direct.answer(request, now=datetime.now())
-
     async def generate(self, request: GenerateRequest) -> GenerateResponse | ProblemDetail:
         """Получить ответ целиком. Для служебных вызовов, не для пути абонента."""
         trace_id = self.new_trace_id()
 
         if (problem := self._check_quota(request, trace_id)) is not None:
             return problem
-
-        if (direct := self._direct_answer(request)) is not None:
-            return GenerateResponse(
-                answer=direct.text,
-                model="direct",
-                confidence_score=1.0,
-                disclaimer=direct.disclaimer,
-                trace_id=trace_id,
-                routing={"path": "direct"},
-            )
 
         messages, report = self._prepare(request)
 
@@ -431,21 +374,6 @@ class LlmGateway:
                 channel=channel, inquiry_type=inquiry_type, outcome="error"
             )
             yield ErrorEvent(problem=problem)
-            return
-
-        if (direct := self._direct_answer(request)) is not None:
-            metrics.ASSISTANT_TTFT_SECONDS.observe(time.perf_counter() - started)
-            metrics.record_response(
-                channel=channel, inquiry_type=inquiry_type, outcome="success"
-            )
-            yield TokenEvent(delta=direct.text)
-            yield MetadataEvent(confidence_score=1.0, disclaimer=direct.disclaimer)
-            yield DoneEvent(
-                finish_reason=FinishReason.STOP,
-                usage=Usage(),
-                routing={"path": "direct"},
-                trace_id=trace_id,
-            )
             return
 
         messages, report = self._prepare(request)

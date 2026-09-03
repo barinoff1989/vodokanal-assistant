@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from app.backend.orchestrator import Orchestrator
 from app.gateway.llm_gateway import LlmGateway
 from app.metrics import prometheus as metrics
 from app.models import (
@@ -73,13 +74,15 @@ def _sse(event_name: str, payload: dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def create_app(gateway: LlmGateway | None = None) -> FastAPI:
+def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     """Собрать приложение.
 
-    Шлюз внедряется, чтобы проверки не требовали ни Redis, ни платного внешнего
-    API: подменяется он, а не сетевой слой.
+    Внедряется **оркестратор**, а не шлюз: по разделу 5.2 выбор пути ответа и
+    сборка контекста — дело Backend, и HTTP-слою достаточно знать, что кто-то
+    отдаёт ему поток событий. Подменяется он, а не сетевой слой, — иначе
+    проверки требовали бы Redis и платного внешнего API.
     """
-    resolved = gateway if gateway is not None else LlmGateway()
+    resolved = orchestrator if orchestrator is not None else Orchestrator(LlmGateway())
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -179,9 +182,9 @@ def create_app(gateway: LlmGateway | None = None) -> FastAPI:
     return app
 
 
-async def _event_stream(gateway: LlmGateway, request: GenerateRequest) -> AsyncIterator[str]:
+async def _event_stream(source: Orchestrator, request: GenerateRequest) -> AsyncIterator[str]:
     """Перевести события шлюза в формат Server-Sent Events (раздел 7.3)."""
-    async for event in gateway.stream(request):
+    async for event in source.stream(request):
         if isinstance(event, TokenEvent):
             yield _sse("token", {"delta": event.delta})
         elif isinstance(event, MetadataEvent):

@@ -9,10 +9,13 @@
 извлекать из формулировки абонента — лишний шаг, на котором теряются как раз
 самые нужные случаи («у нас третий день нет воды» адреса не содержит вовсе).
 
-ПРЕДМЕТНАЯ ЛОГИКА ЖИВЁТ ЗДЕСЬ, А НЕ В ШЛЮЗЕ. Шлюз знает только, что у него может
-быть прямой ответчик, и ничего — про водоканал, адреса и отключения. Иначе
-утверждение из его же описания («здесь нет ничего про водоканал») перестало бы
-быть правдой при первой же теме.
+ПРЕДМЕТНАЯ ЛОГИКА ЖИВЁТ ЗДЕСЬ, А НЕ В ОРКЕСТРАЦИИ. Backend знает только, что у
+него может быть прямой ответчик, и ничего — про водоканал, адреса и отключения.
+
+Первая редакция внедряла этот ответчик **в шлюз**, потому что оркестратора ещё
+не было. Работало, но слой был не тот: по разделу 5.2 выбор пути ответа — дело
+Backend, а шлюз отвечает за модель, лимиты и защиту. Перенесено вместе с
+появлением оркестратора.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.gateway.llm_gateway import DirectAnswer
+from app.backend.orchestrator import DirectAnswer
 from app.models import GenerateRequest
 from app.outages.parser import normalize_house, normalize_street
 from app.outages.store import DEFAULT_MAX_AGE, OutageStore

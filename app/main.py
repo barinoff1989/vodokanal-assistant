@@ -11,16 +11,22 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 
+from app.backend.orchestrator import Orchestrator
 from app.config import get_settings
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
+from app.kb.search import KnowledgeBase, SentenceTransformerEmbedder
+from app.outages.answer import OutageResponder
+from app.outages.store import OutageStore
 
 logger = logging.getLogger(__name__)
 
 
-def _build_gateway() -> LlmGateway:
-    """Собрать шлюз с учётом лимитов, если хранилище доступно.
+def _build_quota() -> QuotaManager | None:
+    """Собрать учёт лимитов, если клиент хранилища установлен.
 
     Подключение к Redis создаётся лениво и не проверяется здесь: по ADR-008
     недоступность хранилища — это ответ `503` на конкретный запрос, а не отказ
@@ -47,7 +53,40 @@ def _build_gateway() -> LlmGateway:
         logger.warning("клиент Redis не установлен: лимиты не проверяются")
         quota = None
 
-    return LlmGateway(quota=quota, settings=settings)
+    return quota
+
+
+def _build_knowledge_base() -> KnowledgeBase | None:
+    """Проиндексировать корпус, если он на месте.
+
+    Отсутствие корпуса — не отказ подняться: поиск выключается, модель отвечает
+    без опоры на регламенты. На прототипе это допустимо и заметно по журналу; на
+    MVP так работать нельзя, и там пустая база знаний должна ронять запуск.
+    """
+    settings = get_settings()
+    path = Path(settings.kb_corpus_path)
+    if not path.exists():
+        logger.warning("корпус базы знаний не найден (%s): поиск выключен", path)
+        return None
+
+    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    return KnowledgeBase.from_file(path, embedder)
+
+
+def _build_outages() -> OutageResponder | None:
+    """Прочитать график отключений, если файл на месте.
+
+    Отметка актуальности берётся от времени чтения, а не от дат внутри файла:
+    даты в графике говорят о воде, а не о свежести графика (ADR-013).
+    """
+    settings = get_settings()
+    path = Path(settings.outage_schedule_path)
+    if not path.exists():
+        logger.warning("график отключений не найден (%s): ответы по нему выключены", path)
+        return None
+
+    store = OutageStore.from_file(path, year=datetime.now().year, loaded_at=datetime.now())
+    return OutageResponder(store)
 
 
 def create() -> object:
@@ -64,7 +103,18 @@ def create() -> object:
     except OSError as exc:  # порт занят — сервис всё равно должен подняться
         logger.warning("отдача метрик не запущена: %s", exc)
 
-    return create_app(_build_gateway())
+    settings = get_settings()
+    quota = _build_quota()
+    responders = tuple(r for r in (_build_outages(),) if r is not None)
+
+    orchestrator = Orchestrator(
+        LlmGateway(quota=quota, settings=settings),
+        knowledge_base=_build_knowledge_base(),
+        direct=responders,
+        quota=quota,
+        settings=settings,
+    )
+    return create_app(orchestrator)
 
 
 app = create()
