@@ -92,3 +92,25 @@ def test_управляемый_провайдер_в_production_проходи�
 def test_неизвестное_окружение_отклоняется():
     with pytest.raises(ValidationError):
         _settings(app_env="staging")
+
+
+def test_модель_эмбеддингов_задана_настройкой():
+    """ADR-014: на прототипе e5-small, на MVP BGE-M3 по ADR-007.
+
+    Значение обязано быть настройкой, а не константой в коде: оно ложится в
+    payload каждого вектора и сверяется при поиске. Расхождение модели индекса
+    и модели запроса — самая дорогая ошибка в поиске, а моделей теперь две.
+    """
+    assert _settings().embedding_model
+    assert "/" in _settings().embedding_model
+
+
+def test_число_фрагментов_в_промпте_меньше_числа_кандидатов():
+    """`top_k = 20 -> top_n = 3` (ADR-006).
+
+    На прототипе переранжирования между ними нет (ADR-014), но соотношение
+    сохраняется: порог отсеивает, а в промпт уходит тройка.
+    """
+    settings = _settings()
+    assert settings.rerank_top_n < settings.vector_top_k
+    assert 0.0 < settings.score_threshold <= 1.0

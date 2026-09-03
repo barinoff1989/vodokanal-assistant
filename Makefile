@@ -4,7 +4,7 @@
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm install-data install-pii model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii install-search measure-search model-pull preflight test test-live lint typecheck check
 
 help:
 	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
@@ -12,8 +12,10 @@ help:
 	@echo "install-llm — только тяжёлый LiteLLM, если install-min уже прошёл"
 	@echo "install-data — генератор синтетики (шаг 0)"
 	@echo "install-pii — защита персональных данных + русская модель (шаг 3)"
+	@echo "install-search — модели поиска: эмбеддинги и переранжирование (шаг 5)"
 	@echo "model-pull  — скачать локальную тестовую модель в Ollama"
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
+	@echo "measure-search — замер моделей поиска на этой машине (шаг 5)"
 	@echo "test        — тесты без внешних зависимостей"
 	@echo "test-live   — тесты на реальной модели (нужна запущенная Ollama)"
 	@echo "lint        — ruff"
@@ -41,6 +43,17 @@ install-llm:
 
 install-data:
 	$(PYTHON) $(PIP_SLOW) ".[data]"
+
+# Ставится на шаге 5. Тянет torch — на процессорной машине это около 250 МБ
+# колёс, плюс по 2,3 ГБ весов на каждую модель при первом запуске замера.
+install-search:
+	$(PYTHON) $(PIP_SLOW) sentence-transformers psutil
+
+# Отвечает на вопрос, укладываются ли модели ADR-007 в бюджет задержки на машине
+# без видеоускорителя. Числа, а не рассуждение: проект уже дважды получал
+# результаты, обратные ожиданиям (раздел 51).
+measure-search:
+	$(PYTHON) scripts/measure_search_models.py
 
 install-pii:
 	$(PYTHON) $(PIP_SLOW) ".[pii]"
