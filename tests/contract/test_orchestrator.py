@@ -344,3 +344,55 @@ def test_оркестратор_отдаёт_тот_же_контракт(method
     """HTTP-слой не должен отличать Backend от шлюза: события те же."""
     assert hasattr(Orchestrator, method)
     assert hasattr(LlmGateway, method)
+
+
+# --- прогрев ------------------------------------------------------------------ #
+
+
+def test_оркестратор_прогревает_шлюз():
+    """Прогрев доходит до шлюза через оркестратор, а не теряется по дороге."""
+    warmed: list[str] = []
+
+    class TrackingGateway:
+        def warmup(self) -> None:
+            warmed.append("да")
+
+    orchestrator = Orchestrator(TrackingGateway())  # type: ignore[arg-type]
+    orchestrator.warmup()
+
+    assert warmed == ["да"]
+
+
+def test_интерфейс_прогревает_настоящий_оркестратор():
+    """**Проверка, которой не хватало, когда прогрев сломался.**
+
+    Соседняя проверка в `test_llm_gateway.py` подставляет собственную заглушку с
+    методом `warmup` и доказывает, что интерфейс вызывает его **у того, у кого он
+    есть**. Что настоящий объект метод потерял, она увидеть не может — и не
+    увидела: с появлением Backend внедрять стали оркестратор, у которого метода
+    не было, `getattr` вернул `None`, и прогрев перестал выполняться вовсе.
+
+    Здесь через интерфейс проходит **настоящий** `Orchestrator**, и заглушкой
+    подменён только шлюз — то есть проверяется вся цепочка внедрения целиком.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.api import create_app
+
+    warmed: list[str] = []
+
+    class TrackingGateway:
+        def warmup(self) -> None:
+            warmed.append("да")
+
+        async def generate(self, request: GenerateRequest) -> Any:
+            return GenerateResponse(answer="", model="m", trace_id="t")
+
+        async def stream(self, request: GenerateRequest) -> Any:
+            yield DoneEvent(trace_id="t")
+
+    orchestrator = Orchestrator(TrackingGateway())  # type: ignore[arg-type]
+    with TestClient(create_app(orchestrator)):
+        pass
+
+    assert warmed == ["да"], "интерфейс не прогрел настоящий оркестратор при запуске"
