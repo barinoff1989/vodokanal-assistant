@@ -36,12 +36,26 @@ def _build_quota() -> QuotaManager | None:
     settings = get_settings()
     try:
         import redis
+        from redis.backoff import NoBackoff
+        from redis.retry import Retry
 
         client = redis.Redis(
             host=settings.redis_host,
             port=settings.redis_port,
             db=settings.redis_db,
             decode_responses=True,
+            socket_connect_timeout=settings.redis_timeout_seconds,
+            socket_timeout=settings.redis_timeout_seconds,
+            # Повторы выключены намеренно, и это главное из трёх изменений:
+            # именно они, а не таймаут, давали основную задержку (26,2 с без
+            # таймаута, 8,7 с с таймаутом и повторами, 0,5 с без них).
+            #
+            # По ADR-008 недоступное хранилище — это `503` + `Retry-After`, то
+            # есть повторяет **клиент**, по названному ему времени. Повтор
+            # внутри запроса удлиняет ожидание абонента ровно во столько раз,
+            # сколько попыток, и делает это невидимым: снаружи виден один
+            # долгий запрос, а не четыре быстрых отказа.
+            retry=Retry(NoBackoff(), 0),
         )
         quota = QuotaManager(
             client,
