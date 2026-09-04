@@ -233,3 +233,60 @@ def test_пустой_кэш_объясняет_себя_а_не_выгляди�
     message = str(caught.value)
     assert "локальном кэше" in message
     assert "make install-search" in message
+
+
+# --- вопрос и ответ индексируются порознь (пункт 62) --------------------------- #
+
+
+def _knowledge_base():
+    """Настоящий корпус на настоящей модели — эти проверки про устройство индекса.
+
+    Подменённая модель здесь не годится: проверяется, что вопрос и ответ попали
+    в индекс порознь, а это свойство сборки, а не поиска.
+    """
+    from app.main import _build_knowledge_base
+
+    knowledge_base = _build_knowledge_base()
+    if knowledge_base is None:
+        pytest.skip("корпус базы знаний не найден")
+    return knowledge_base
+
+
+def test_у_фрагмента_столько_векторов_сколько_частей():
+    """Вопрос и ответ — два вида одного фрагмента, а не один склеенный.
+
+    Склейка топила короткий вопрос в длинном ответе: у `faq-11` вопрос 24 знака
+    против 611, и дословный вопрос корпуса набирал 0,844 — ниже порога, при том
+    что ответ на него лежит в базе знаний буквально."""
+    knowledge_base = _knowledge_base()
+    assert all(len(entry.vectors) == 2 for entry in knowledge_base._entries)
+
+
+def test_близость_берётся_по_лучшей_части_а_не_по_средней():
+    """Среднее вернуло бы то самое разбавление, ради устранения которого части
+    и разведены."""
+    from app.kb.search import _Entry
+    from app.models import ContextChunk
+
+    entry = _Entry(
+        chunk=ContextChunk(
+            chunk_id="c", text="t", source_title="s", source_url="u", relevance_score=0.0
+        ),
+        vectors=([1.0, 0.0], [0.0, 1.0]),
+    )
+    assert entry.similarity([1.0, 0.0]) == pytest.approx(1.0)
+
+
+def test_в_промпт_уходит_пара_целиком_а_не_найденная_часть():
+    """Единица поиска перестала совпадать с единицей контекста.
+
+    Ищется по частям, но модель обязана получить ответ вместе с вопросом, к
+    которому он относится, — иначе фрагмент теряет смысл."""
+    from app.config import get_settings
+
+    knowledge_base = _knowledge_base()
+    found = knowledge_base.search("Почему начисляются пени?", top_n=1, threshold=0.0)
+    corpus = json.loads(Path(get_settings().kb_corpus_path).read_text(encoding="utf-8"))
+    pair = next(c for c in corpus if c["chunk_id"] == found[0].chunk_id)
+    assert pair["question"] in found[0].text
+    assert pair["answer"] in found[0].text

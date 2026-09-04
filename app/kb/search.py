@@ -4,9 +4,25 @@
 вопрос-ответ из открытого источника. Одна пара ложится в один фрагмент: длина
 ответа от 89 до 1019 знаков, резать нечего.
 
-ЧТО ЭМБЕДДИТСЯ — ВОПРОС ВМЕСТЕ С ОТВЕТОМ. Вопрос из FAQ сформулирован так же,
-как его задаёт абонент, и выбрасывать его значило бы отказаться от самой
-близкой к запросу части фрагмента.
+ЧТО ЭМБЕДДИТСЯ — ВОПРОС И ОТВЕТ **РАЗНЫМИ ВЕКТОРАМИ**, близость берётся по
+лучшему из них.
+
+Первая редакция эмбеддила вопрос вместе с ответом одним куском. Довод был верен:
+вопрос из FAQ сформулирован так же, как его задаёт абонент, и выбрасывать его
+нельзя. Неверным оказалось следствие — что их надо склеить.
+
+**Вопрос тонет в ответе.** Медиана ответа 472 знака, максимум 1019; у `faq-11`
+вопрос 24 знака против 611 — отношение один к двадцати пяти. Вектор склейки
+определяется ответом, а не вопросом, и оценка падает тем сильнее, чем
+многословнее ответ. Дословный вопрос корпуса «Почему начисляются пени?» набирал
+0,844 — ниже порога 0,86, при том что ответ на него лежит в базе знаний
+буквально.
+
+Два вектора на один фрагмент это снимают, ничего не выбрасывая: совпадение с
+вопросом больше не разбавляется, а совпадение по существу ответа по-прежнему
+находится. **Единица поиска перестала совпадать с единицей контекста:** ищется
+по частям, а в промпт уходит пара целиком — иначе модель получила бы ответ без
+вопроса, к которому он относится.
 
 ПРЕФИКСЫ `query:` И `passage:` ОБЯЗАТЕЛЬНЫ. Модель e5 обучена с ними, и без них
 близость считается по другому распределению — это свойство модели, а не
@@ -67,10 +83,23 @@ def cosine(first: Sequence[float], second: Sequence[float]) -> float:
 
 @dataclass(frozen=True, slots=True)
 class _Entry:
-    """Фрагмент корпуса вместе с его вектором."""
+    """Фрагмент корпуса вместе с векторами его частей.
+
+    Векторов несколько: вопрос и ответ индексируются порознь, чтобы короткий
+    вопрос не растворялся в длинном ответе. Близость фрагмента — лучшая из
+    близостей его частей.
+    """
 
     chunk: ContextChunk
-    vector: Sequence[float]
+    vectors: tuple[Sequence[float], ...]
+
+    def similarity(self, query: Sequence[float]) -> float:
+        """Лучшая близость среди частей.
+
+        Максимум, а не среднее: среднее вернуло бы то самое разбавление, ради
+        устранения которого части и разведены.
+        """
+        return max(cosine(query, vector) for vector in self.vectors)
 
 
 class KnowledgeBase:
@@ -94,7 +123,17 @@ class KnowledgeBase:
         """
         items = json.loads(path.read_text(encoding="utf-8"))
         texts = [f"{item['question']}\n{item['answer']}" for item in items]
-        vectors = embedder.encode([PASSAGE_PREFIX + text for text in texts])
+        # Части индексируются порознь, но одним вызовом: модель дорого поднимать,
+        # а не звать, и разбивать вызов незачем.
+        # Склейка «вопрос + ответ» третьим видом **не берётся**: проверено
+        # замером — hit@1, hit@3 и MRR не сдвинулись ни на единицу, а при
+        # действующем пороге стало на один ответ хуже. Её близость всегда лежит
+        # между близостями частей, то есть максимум её никогда не выбирает.
+        views = [(item["question"], item["answer"]) for item in items]
+        encoded = embedder.encode(
+            [PASSAGE_PREFIX + part for view in views for part in view]
+        )
+        per_item = len(views[0]) if views else 0
 
         entries = [
             _Entry(
@@ -105,9 +144,11 @@ class KnowledgeBase:
                     source_url=item["source_url"],
                     relevance_score=0.0,
                 ),
-                vector=vector,
+                vectors=tuple(
+                    encoded[index * per_item : (index + 1) * per_item]
+                ),
             )
-            for item, text, vector in zip(items, texts, vectors, strict=True)
+            for index, (item, text) in enumerate(zip(items, texts, strict=True))
         ]
         return cls(entries, embedder)
 
@@ -130,10 +171,7 @@ class KnowledgeBase:
 
         (vector,) = self._embedder.encode([QUERY_PREFIX + query])
         scored = sorted(
-            (
-                (cosine(vector, entry.vector), entry)
-                for entry in self._entries
-            ),
+            ((entry.similarity(vector), entry) for entry in self._entries),
             key=lambda pair: -pair[0],
         )
         candidates = scored[: top_k] if top_k is not None else scored
