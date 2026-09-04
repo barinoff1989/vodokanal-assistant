@@ -96,7 +96,9 @@ def measure_hits(results: list[dict[str, Any]], subset: str) -> dict[str, float]
     return {"всего": len(rows), "hit@1": hit1, "hit@3": hit3, "MRR": mrr}
 
 
-def sweep(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def sweep(
+    results: list[dict[str, Any]], *, current: float | None = None
+) -> list[dict[str, Any]]:
     """Цена каждого значения порога, в обе стороны.
 
     Потеря — вопрос по делу, у которого ожидаемый фрагмент есть в тройке, но
@@ -109,8 +111,12 @@ def sweep(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
     unanswerable = [r for r in results if r["subset"] in ("no_answer", "control")]
 
+    # Действующее значение обязано попасть в сетку: иначе скрипт мерит всё,
+    # кроме того, что стоит в настройках, — и «<- сейчас» не показывается вовсе.
+    grid = sorted(set(SWEEP) | ({current} if current is not None else set()))
+
     table: list[dict[str, Any]] = []
-    for threshold in SWEEP:
+    for threshold in grid:
         lost = sum(1 for r in answerable if r["ranking"][0][1] < threshold)
         # Попадание в тройку с учётом порога: фрагмент обязан и стоять в тройке,
         # и пройти порог — иначе он до промпта не доедет.
@@ -182,11 +188,11 @@ def main() -> None:
     print(
         f"{'порог':>6} {'ответов сохранено':>18} {'потеряно':>10} {'мусора прошло':>15}"
     )
-    table = sweep(results)
+    table = sweep(results, current=settings.score_threshold)
     for row in table:
         mark = "  <- сейчас" if abs(row["порог"] - settings.score_threshold) < 1e-9 else ""
         print(
-            f"{row['порог']:>6.2f} "
+            f"{row['порог']:>6.3f} "
             f"{row['ответов сохранено']:>10} из {row['всего по делу']:<4} "
             f"{row['ответов потеряно']:>9} "
             f"{row['мусора прошло']:>9} из {row['всего без ответа']:<4}{mark}"
