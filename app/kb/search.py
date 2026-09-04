@@ -151,9 +151,31 @@ class SentenceTransformerEmbedder:
     объявляет тип, платить за это незачем — тот же приём, что с LiteLLM в шлюзе.
     """
 
-    def __init__(self, model_name: str, device: str = "cpu") -> None:
+    def __init__(
+        self, model_name: str, device: str = "cpu", *, local_files_only: bool = True
+    ) -> None:
+        """
+        :param local_files_only: брать веса только из локального кэша.
+
+        **По умолчанию — только из кэша, и это не оптимизация, а требование
+        среды.** На MVP сервис живёт в закрытой сети, где `huggingface.co`
+        недоступен вовсе; обращение к нему при старте там обернулось бы
+        ожиданием сетевых таймаутов на пустом месте.
+
+        На прототипе это заодно экономит время. Замер подъёма сервиса:
+
+        ===================================== ======
+          с обращением к `huggingface.co`      19,1 с
+          только из кэша                        5,3 с
+        ===================================== ======
+
+        То есть **четырнадцать секунд из сорока шести** уходило на проверку,
+        не обновилась ли модель, — при том что менять её молча нельзя: смена
+        модели эмбеддингов означает переиндексацию корпуса (ADR-006).
+        """
         self._model_name = model_name
         self._device = device
+        self._local_files_only = local_files_only
         self._model: object | None = None
 
     def warm_up(self) -> None:
@@ -169,7 +191,22 @@ class SentenceTransformerEmbedder:
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._model_name, device=self._device)
+            try:
+                self._model = SentenceTransformer(
+                    self._model_name,
+                    device=self._device,
+                    local_files_only=self._local_files_only,
+                )
+            except Exception as exc:
+                if not self._local_files_only:
+                    raise
+                # Отказ из-за пустого кэша выглядит как отказ сети, и без
+                # подсказки следующий человек будет искать не там.
+                raise RuntimeError(
+                    f"модель {self._model_name!r} не найдена в локальном кэше. "
+                    "Скачать один раз: make install-search — либо поднять сервис "
+                    "с EMBEDDING_LOCAL_FILES_ONLY=false, если сеть доступна"
+                ) from exc
         return self._model
 
     def encode(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:

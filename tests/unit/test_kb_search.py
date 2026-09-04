@@ -187,3 +187,49 @@ def test_источник_доходит_до_фрагмента():
     assert found[0].source_url
     assert found[0].source_title
     assert found[0].chunk_id
+
+
+# --- веса берутся из кэша, а не из сети (пункт 65) ----------------------------- #
+
+
+def test_по_умолчанию_модель_берётся_только_из_кэша():
+    """На MVP сервис живёт в закрытой сети, где `huggingface.co` недоступен.
+
+    Обращение к нему при старте обернулось бы там ожиданием сетевых таймаутов.
+    На прототипе оно же стоило 14 секунд подъёма из 46."""
+    from app.kb.search import SentenceTransformerEmbedder
+
+    embedder = SentenceTransformerEmbedder("любая/модель")
+    assert embedder._local_files_only is True
+
+
+def test_настройка_доходит_до_загрузчика_модели():
+    """Значение из настроек не должно потеряться по дороге: без этой проверки
+    оно осталось бы объявленным и неподключённым — тот же класс ошибки, что с
+    прогревом (журнал, раздел 69)."""
+    from app.config import get_settings
+    from app.main import _build_knowledge_base
+
+    knowledge_base = _build_knowledge_base()
+    if knowledge_base is None:
+        pytest.skip("корпус базы знаний не найден")
+
+    embedder = knowledge_base._embedder
+    assert embedder._local_files_only is get_settings().embedding_local_files_only
+
+
+@pytest.mark.slow
+def test_пустой_кэш_объясняет_себя_а_не_выглядит_отказом_сети():
+    """Отказ из-за отсутствия весов в кэше неотличим от сетевой ошибки.
+
+    Без подсказки следующий человек будет искать причину не там — поэтому
+    сообщение называет и команду скачивания, и способ разрешить сеть."""
+    from app.kb.search import SentenceTransformerEmbedder
+
+    embedder = SentenceTransformerEmbedder("несуществующая/модель-для-проверки")
+    with pytest.raises(RuntimeError) as caught:
+        embedder.warm_up()
+
+    message = str(caught.value)
+    assert "локальном кэше" in message
+    assert "make install-search" in message

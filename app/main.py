@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -84,7 +87,10 @@ def _build_knowledge_base() -> KnowledgeBase | None:
         logger.warning("корпус базы знаний не найден (%s): поиск выключен", path)
         return None
 
-    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    embedder = SentenceTransformerEmbedder(
+        settings.embedding_model,
+        local_files_only=settings.embedding_local_files_only,
+    )
     return KnowledgeBase.from_file(path, embedder)
 
 
@@ -117,6 +123,33 @@ def _build_regulated() -> RegulatedResponder:
     return RegulatedResponder(phone=settings.contact_center_phone, strict=False)
 
 
+@contextmanager
+def _stage(name: str) -> Iterator[None]:
+    """Сообщить, чем сервис занят, и сколько это заняло.
+
+    **Подъём сервиса занимает около минуты, и это не сбой,** а цена решения
+    раздела 50.3: ленивые загрузки вынесены из первого запроса абонента в старт.
+    Замер частей в отдельных процессах:
+
+    ===================================================== ======
+      обезличиватель: presidio и русская модель spaCy       24,9 с
+      база знаний: модель эмбеддингов и индексация          54,0 с
+      **`app.main` целиком**                                45,3 с
+    ===================================================== ======
+
+    Сумма частей больше целого: `torch` и `transformers` нужны обеим и грузятся
+    **один раз на двоих**. Отсюда же следует, что убрать одну из двух моделей
+    сэкономит куда меньше, чем стоит она сама.
+
+    До этих сообщений сервис молчал всю минуту, и отличить «грузится» от
+    «завис» было нечем — в том числе на демонстрации.
+    """
+    logger.info("подъём: %s…", name)
+    started = time.perf_counter()
+    yield
+    logger.info("подъём: %s — готово за %.1f с", name, time.perf_counter() - started)
+
+
 def create() -> object:
     """Собрать приложение. Вынесено функцией ради проверок."""
     from app.api import create_app
@@ -131,21 +164,31 @@ def create() -> object:
     except OSError as exc:  # порт занят — сервис всё равно должен подняться
         logger.warning("отдача метрик не запущена: %s", exc)
 
+    started = time.perf_counter()
     settings = get_settings()
     quota = _build_quota()
+
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
     # реестр дешевле поиска по графику, а тем у него меньше.
-    responders = tuple(
-        r for r in (_build_regulated(), _build_outages()) if r is not None
-    )
+    with _stage("реестр ответов и график отключений"):
+        responders = tuple(
+            r for r in (_build_regulated(), _build_outages()) if r is not None
+        )
+
+    with _stage("слой защиты: обезличиватель и охранители"):
+        gateway = LlmGateway(quota=quota, settings=settings)
+
+    with _stage("база знаний: модель эмбеддингов и индексация"):
+        knowledge_base = _build_knowledge_base()
 
     orchestrator = Orchestrator(
-        LlmGateway(quota=quota, settings=settings),
-        knowledge_base=_build_knowledge_base(),
+        gateway,
+        knowledge_base=knowledge_base,
         direct=responders,
         quota=quota,
         settings=settings,
     )
+    logger.info("подъём завершён за %.1f с", time.perf_counter() - started)
     return create_app(orchestrator)
 
 
