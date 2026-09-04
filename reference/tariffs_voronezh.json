@@ -1,0 +1,239 @@
+{
+  "source_title": "Тарифы и нормативы — ООО «РВК-Воронеж»",
+  "source_url": "https://voronezh.rosvodokanal.ru/users/individual/rates/",
+  "fetched_on": "2026-09-04",
+  "services": {
+    "питьевая вода": [
+      {
+        "from": "2025-01-01",
+        "to": "2025-06-30",
+        "without_vat": "26.24",
+        "for_population": "31.49"
+      },
+      {
+        "from": "2025-07-01",
+        "to": "2025-12-31",
+        "without_vat": "29.96",
+        "for_population": "35.95"
+      },
+      {
+        "from": "2026-01-01",
+        "to": "2026-09-30",
+        "without_vat": "29.96",
+        "for_population": "36.55"
+      },
+      {
+        "from": "2026-10-01",
+        "to": "2026-12-31",
+        "without_vat": "33.56",
+        "for_population": "40.94"
+      },
+      {
+        "from": "2027-01-01",
+        "to": "2027-06-30",
+        "without_vat": "33.56",
+        "for_population": "40.94"
+      },
+      {
+        "from": "2027-07-01",
+        "to": "2027-12-31",
+        "without_vat": "37.58",
+        "for_population": "45.85"
+      },
+      {
+        "from": "2028-01-01",
+        "to": "2028-06-30",
+        "without_vat": "37.58",
+        "for_population": "45.85"
+      },
+      {
+        "from": "2028-07-01",
+        "to": "2028-12-31",
+        "without_vat": "39.09",
+        "for_population": "47.69"
+      },
+      {
+        "from": "2029-01-01",
+        "to": "2029-06-30",
+        "without_vat": "39.09",
+        "for_population": "47.69"
+      },
+      {
+        "from": "2029-07-01",
+        "to": "2029-12-31",
+        "without_vat": "36.11",
+        "for_population": "44.05"
+      },
+      {
+        "from": "2030-07-01",
+        "to": "2030-12-31",
+        "without_vat": "34.34",
+        "for_population": "41.89"
+      },
+      {
+        "from": "2031-01-01",
+        "to": "2031-06-30",
+        "without_vat": "34.34",
+        "for_population": "41.89"
+      },
+      {
+        "from": "2031-07-01",
+        "to": "2031-12-31",
+        "without_vat": "35.54",
+        "for_population": "43.36"
+      },
+      {
+        "from": "2032-01-01",
+        "to": "2032-06-30",
+        "without_vat": "35.54",
+        "for_population": "43.36"
+      },
+      {
+        "from": "2032-07-01",
+        "to": "2032-12-31",
+        "without_vat": "35.64",
+        "for_population": "43.48"
+      },
+      {
+        "from": "2033-01-01",
+        "to": "2033-06-30",
+        "without_vat": "35.64",
+        "for_population": "43.48"
+      },
+      {
+        "from": "2033-07-01",
+        "to": "2033-12-31",
+        "without_vat": "36.44",
+        "for_population": "44.46"
+      },
+      {
+        "from": "2034-01-01",
+        "to": "2034-06-30",
+        "without_vat": "36.44",
+        "for_population": "44.46"
+      },
+      {
+        "from": "2034-07-01",
+        "to": "2034-12-31",
+        "without_vat": "37.12",
+        "for_population": "45.29"
+      }
+    ],
+    "водоотведение": [
+      {
+        "from": "2025-01-01",
+        "to": "2025-06-30",
+        "without_vat": "26.43",
+        "for_population": "31.72"
+      },
+      {
+        "from": "2025-07-01",
+        "to": "2025-12-31",
+        "without_vat": "31.93",
+        "for_population": "38.32"
+      },
+      {
+        "from": "2026-01-01",
+        "to": "2026-09-30",
+        "without_vat": "31.93",
+        "for_population": "38.95"
+      },
+      {
+        "from": "2026-10-01",
+        "to": "2026-12-31",
+        "without_vat": "38.30",
+        "for_population": "46.73"
+      },
+      {
+        "from": "2027-01-01",
+        "to": "2027-06-30",
+        "without_vat": "38.30",
+        "for_population": "46.73"
+      },
+      {
+        "from": "2027-07-01",
+        "to": "2027-12-31",
+        "without_vat": "45.95",
+        "for_population": "56.06"
+      },
+      {
+        "from": "2028-01-01",
+        "to": "2028-06-30",
+        "without_vat": "45.95",
+        "for_population": "56.06"
+      },
+      {
+        "from": "2028-07-01",
+        "to": "2028-12-31",
+        "without_vat": "47.79",
+        "for_population": "58.30"
+      },
+      {
+        "from": "2029-01-01",
+        "to": "2029-06-30",
+        "without_vat": "47.79",
+        "for_population": "58.30"
+      },
+      {
+        "from": "2029-07-01",
+        "to": "2029-12-31",
+        "without_vat": "49.70",
+        "for_population": "60.63"
+      },
+      {
+        "from": "2030-07-01",
+        "to": "2030-12-31",
+        "without_vat": "51.69",
+        "for_population": "63.06"
+      },
+      {
+        "from": "2031-01-01",
+        "to": "2031-06-30",
+        "without_vat": "51.69",
+        "for_population": "63.06"
+      },
+      {
+        "from": "2031-07-01",
+        "to": "2031-12-31",
+        "without_vat": "53.46",
+        "for_population": "65.22"
+      },
+      {
+        "from": "2032-01-01",
+        "to": "2032-06-30",
+        "without_vat": "53.46",
+        "for_population": "65.22"
+      },
+      {
+        "from": "2032-07-01",
+        "to": "2032-12-31",
+        "without_vat": "56.72",
+        "for_population": "69.20"
+      },
+      {
+        "from": "2033-01-01",
+        "to": "2033-06-30",
+        "without_vat": "56.72",
+        "for_population": "69.20"
+      },
+      {
+        "from": "2033-07-01",
+        "to": "2033-12-31",
+        "without_vat": "61.92",
+        "for_population": "75.54"
+      },
+      {
+        "from": "2034-01-01",
+        "to": "2034-06-30",
+        "without_vat": "61.92",
+        "for_population": "75.54"
+      },
+      {
+        "from": "2034-07-01",
+        "to": "2034-12-31",
+        "without_vat": "66.97",
+        "for_population": "81.70"
+      }
+    ]
+  }
+}
