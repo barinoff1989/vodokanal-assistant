@@ -253,13 +253,21 @@ def _knowledge_base():
 
 
 def test_у_фрагмента_столько_векторов_сколько_частей():
-    """Вопрос и ответ — два вида одного фрагмента, а не один склеенный.
+    """Вопрос и части ответа — отдельные виды фрагмента, а не один склеенный.
 
     Склейка топила короткий вопрос в длинном ответе: у `faq-11` вопрос 24 знака
     против 611, и дословный вопрос корпуса набирал 0,844 — ниже порога, при том
     что ответ на него лежит в базе знаний буквально."""
+    from app.config import get_settings
+    from app.kb.search import split_answer
+
+    settings = get_settings()
+    corpus = json.loads(Path(settings.kb_corpus_path).read_text(encoding="utf-8"))
     knowledge_base = _knowledge_base()
-    assert all(len(entry.vectors) == 2 for entry in knowledge_base._entries)
+
+    for entry, item in zip(knowledge_base._entries, corpus, strict=True):
+        parts = split_answer(item["answer"], settings.kb_part_max_chars)
+        assert len(entry.vectors) == 1 + len(parts), entry.chunk.chunk_id
 
 
 def test_близость_берётся_по_лучшей_части_а_не_по_средней():

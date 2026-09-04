@@ -1,8 +1,7 @@
 """Поиск по базе знаний: эмбеддинг запроса, косинусная близость, порог.
 
 Корпус прототипа — FAQ воронежского филиала (ADR-013), двадцать пар
-вопрос-ответ из открытого источника. Одна пара ложится в один фрагмент: длина
-ответа от 89 до 1019 знаков, резать нечего.
+вопрос-ответ из открытого источника.
 
 ЧТО ЭМБЕДДИТСЯ — ВОПРОС И ОТВЕТ **РАЗНЫМИ ВЕКТОРАМИ**, близость берётся по
 лучшему из них.
@@ -46,6 +45,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,7 +53,13 @@ from typing import Protocol, cast
 
 from app.models import ContextChunk
 
-__all__ = ["Embedder", "KnowledgeBase", "SentenceTransformerEmbedder", "cosine"]
+__all__ = [
+    "Embedder",
+    "KnowledgeBase",
+    "SentenceTransformerEmbedder",
+    "cosine",
+    "split_answer",
+]
 
 QUERY_PREFIX = "query: "
 PASSAGE_PREFIX = "passage: "
@@ -79,6 +85,47 @@ def cosine(first: Sequence[float], second: Sequence[float]) -> float:
     if norm == 0.0:
         return 0.0
     return max(0.0, min(1.0, dot / norm))
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?:;])\s+")
+
+
+def split_answer(answer: str, max_chars: int) -> list[str]:
+    """Разрезать ответ на части, годные для сравнения с вопросом абонента.
+
+    :param answer: текст ответа.
+    :param max_chars: предел длины части.
+
+    **Режется по готовым границам, а не по счёту знаков.** Сначала по строкам:
+    одиннадцать ответов из двадцати — списки способов («по телефону…», «в личном
+    кабинете…», «в офисе…»), и каждый пункт отвечает на свой вопрос абонента.
+    Длинная строка режется дальше по предложениям, и предложения набираются в
+    часть жадно, пока помещаются, — иначе вопрос сравнивался бы с обрывком.
+
+    Предложение длиннее предела **не режется**: обрубок на середине мысли даёт
+    вектор, не значащий ничего, и лучше оставить одну длинную часть, чем две
+    бессмысленные.
+    """
+    parts: list[str] = []
+    for line in (piece.strip() for piece in answer.split("\n")):
+        if not line:
+            continue
+        if len(line) <= max_chars:
+            parts.append(line)
+            continue
+
+        current = ""
+        for sentence in _SENTENCE_END.split(line):
+            if not sentence:
+                continue
+            if current and len(current) + 1 + len(sentence) > max_chars:
+                parts.append(current)
+                current = sentence
+            else:
+                current = f"{current} {sentence}".strip()
+        if current:
+            parts.append(current)
+    return parts or [answer.strip()]
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,8 +160,12 @@ class KnowledgeBase:
         return len(self._entries)
 
     @classmethod
-    def from_file(cls, path: Path, embedder: Embedder) -> KnowledgeBase:
+    def from_file(
+        cls, path: Path, embedder: Embedder, *, part_max_chars: int = 300
+    ) -> KnowledgeBase:
         """Прочитать корпус и проиндексировать его целиком.
+
+        :param part_max_chars: предел длины части ответа при разрезании.
 
         Индексация двадцати фрагментов занимает доли секунды (замер ADR-014: 48
         фрагментов в секунду), поэтому делается при запуске, а не заранее. Когда
@@ -125,15 +176,25 @@ class KnowledgeBase:
         texts = [f"{item['question']}\n{item['answer']}" for item in items]
         # Части индексируются порознь, но одним вызовом: модель дорого поднимать,
         # а не звать, и разбивать вызов незачем.
-        # Склейка «вопрос + ответ» третьим видом **не берётся**: проверено
+        # Склейка «вопрос + ответ» отдельным видом **не берётся**: проверено
         # замером — hit@1, hit@3 и MRR не сдвинулись ни на единицу, а при
         # действующем пороге стало на один ответ хуже. Её близость всегда лежит
         # между близостями частей, то есть максимум её никогда не выбирает.
-        views = [(item["question"], item["answer"]) for item in items]
+        views = [
+            (item["question"], *split_answer(item["answer"], part_max_chars))
+            for item in items
+        ]
         encoded = embedder.encode(
             [PASSAGE_PREFIX + part for view in views for part in view]
         )
-        per_item = len(views[0]) if views else 0
+
+        # Векторы вернулись одним списком — разложить обратно по фрагментам.
+        # Частей у фрагментов разное число, поэтому по срезам, а не по шагу.
+        grouped: list[list[Sequence[float]]] = []
+        cursor = 0
+        for view in views:
+            grouped.append(list(encoded[cursor : cursor + len(view)]))
+            cursor += len(view)
 
         entries = [
             _Entry(
@@ -144,11 +205,9 @@ class KnowledgeBase:
                     source_url=item["source_url"],
                     relevance_score=0.0,
                 ),
-                vectors=tuple(
-                    encoded[index * per_item : (index + 1) * per_item]
-                ),
+                vectors=tuple(vectors),
             )
-            for index, (item, text) in enumerate(zip(items, texts, strict=True))
+            for item, text, vectors in zip(items, texts, grouped, strict=True)
         ]
         return cls(entries, embedder)
 

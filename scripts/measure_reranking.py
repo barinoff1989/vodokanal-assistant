@@ -142,7 +142,11 @@ def main() -> None:
         questions = questions[: args.limit]
 
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
-    kb = KnowledgeBase.from_file(ROOT / settings.kb_corpus_path, embedder)
+    kb = KnowledgeBase.from_file(
+        ROOT / settings.kb_corpus_path,
+        embedder,
+        part_max_chars=settings.kb_part_max_chars,
+    )
     print(f"корпус: {len(kb)} фрагментов, вопросов: {len(questions)}")
 
     from sentence_transformers import CrossEncoder

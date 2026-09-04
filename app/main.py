@@ -91,7 +91,9 @@ def _build_knowledge_base() -> KnowledgeBase | None:
         settings.embedding_model,
         local_files_only=settings.embedding_local_files_only,
     )
-    return KnowledgeBase.from_file(path, embedder)
+    return KnowledgeBase.from_file(
+        path, embedder, part_max_chars=settings.kb_part_max_chars
+    )
 
 
 def _build_outages() -> OutageResponder | None:

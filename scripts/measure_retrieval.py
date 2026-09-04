@@ -151,7 +151,11 @@ def main() -> None:
     print(f"загрузка модели: {load_seconds:.1f} с")
 
     started = time.perf_counter()
-    kb = KnowledgeBase.from_file(ROOT / settings.kb_corpus_path, embedder)
+    kb = KnowledgeBase.from_file(
+        ROOT / settings.kb_corpus_path,
+        embedder,
+        part_max_chars=settings.kb_part_max_chars,
+    )
     index_seconds = time.perf_counter() - started
     print(f"индексация {len(kb)} фрагментов: {index_seconds:.2f} с")
 
