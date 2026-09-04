@@ -1,10 +1,10 @@
 # Команды запуска. На Windows выполнять из Git Bash.
-# Набор растёт по шагам плана разработки; сейчас закрыт шаг 0.5.
+# Набор растёт по шагам плана разработки; закрыты шаги 0.5, 1-6, 8, 8.5, 9 и часть 10.
 
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm install-data install-pii install-search measure-search model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii install-search measure-search golden-set measure-retrieval measure-reranking model-pull preflight test test-live lint typecheck check
 
 help:
 	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
@@ -16,6 +16,9 @@ help:
 	@echo "model-pull  — скачать локальную тестовую модель в Ollama"
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
 	@echo "measure-search — замер моделей поиска на этой машине (шаг 5)"
+	@echo "golden-set  — собрать эталонный набор поиска из разметки"
+	@echo "measure-retrieval — качество поиска и цена порога (секунды)"
+	@echo "measure-reranking — кросс-энкодер против косинуса (минут двадцать)"
 	@echo "test        — тесты без внешних зависимостей"
 	@echo "test-live   — тесты на реальной модели (нужна запущенная Ollama)"
 	@echo "lint        — ruff"
@@ -54,6 +57,22 @@ install-search:
 # результаты, обратные ожиданиям (раздел 51).
 measure-search:
 	$(PYTHON) scripts/measure_search_models.py
+
+# Эталонный набор поиска. Сборка обязательна перед любым из двух замеров: она
+# подставляет тексты вопросов из настоящих источников и падает, если источник
+# сместился.
+golden-set:
+	$(PYTHON) scripts/build_golden_set.py
+
+# Качество поиска и цена порога. Секунды.
+measure-retrieval: golden-set
+	$(PYTHON) scripts/measure_retrieval.py --json golden_set/measurement.json
+
+# Кросс-энкодер против косинуса, вне пути абонента. Двадцать минут: 1320 пар,
+# каждая проходит через модель целиком. Это офлайн-работа, медленно здесь
+# ничего не стоит.
+measure-reranking: golden-set
+	$(PYTHON) scripts/measure_reranking.py --json golden_set/reranking.json
 
 install-pii:
 	$(PYTHON) $(PIP_SLOW) ".[pii]"
