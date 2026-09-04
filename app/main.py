@@ -21,6 +21,7 @@ from app.gateway.quota import QuotaManager
 from app.kb.search import KnowledgeBase, SentenceTransformerEmbedder
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
+from app.regulated import RegulatedResponder
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,19 @@ def _build_outages() -> OutageResponder | None:
     return OutageResponder(store)
 
 
+def _build_regulated() -> RegulatedResponder:
+    """Реестр регламентных ответов (ADR-012).
+
+    Поднимается с `strict=False`: формулировка о качестве воды написана нами и
+    владельцем не утверждена (пункт 37 TODO). Дыра видна по предупреждению в
+    журнале — та же дисциплина, что у пустой базы знаний. **На MVP строгий режим
+    обязателен:** неутверждённый текст там должен ронять запуск, а не тихо
+    уходить абоненту как регламентный.
+    """
+    settings = get_settings()
+    return RegulatedResponder(phone=settings.contact_center_phone, strict=False)
+
+
 def create() -> object:
     """Собрать приложение. Вынесено функцией ради проверок."""
     from app.api import create_app
@@ -105,7 +119,11 @@ def create() -> object:
 
     settings = get_settings()
     quota = _build_quota()
-    responders = tuple(r for r in (_build_outages(),) if r is not None)
+    # Порядок опроса значим: ответчики возвращают None на чужой теме, но
+    # реестр дешевле поиска по графику, а тем у него меньше.
+    responders = tuple(
+        r for r in (_build_regulated(), _build_outages()) if r is not None
+    )
 
     orchestrator = Orchestrator(
         LlmGateway(quota=quota, settings=settings),
