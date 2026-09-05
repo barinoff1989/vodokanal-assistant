@@ -571,6 +571,10 @@ components:
           minimum: 0.0
           title: Relevance Score
           type: number
+        synthetic:
+          default: false
+          title: Synthetic
+          type: boolean
       required:
       - chunk_id
       - source_title

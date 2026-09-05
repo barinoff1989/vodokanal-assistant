@@ -239,6 +239,17 @@ class LlmGateway:
             )
         return None
 
+    def _context_disclaimer(self, request: GenerateRequest) -> str | None:
+        """Оговорка, если хоть один фрагмент контекста синтетический.
+
+        **Признак не выводится здесь заново**, а приходит с фрагментом: второе
+        место, где решается «настоящий документ или нет», разошлось бы с первым.
+        Сам текст задан настройкой — шлюз не знает ничего про водоканал.
+        """
+        if not any(chunk.synthetic for chunk in request.context):
+            return None
+        return self._settings.synthetic_source_disclaimer or None
+
     @staticmethod
     def _sources(request: GenerateRequest) -> list[SourceRef]:
         """Источники ответа — из того же контекста, что ушёл в модель.
@@ -252,6 +263,7 @@ class LlmGateway:
                 source_title=chunk.source_title,
                 source_url=chunk.source_url,
                 relevance_score=chunk.relevance_score,
+                synthetic=chunk.synthetic,
             )
             for chunk in request.context
         ]
@@ -345,6 +357,7 @@ class LlmGateway:
             finish_reason=verdict.finish_reason or FinishReason.STOP,
             usage=usage,
             sources=self._sources(request),
+            disclaimer=self._context_disclaimer(request),
             pii_report=report,
             routing={
                 "provider": self._settings.llm_provider,
@@ -444,7 +457,10 @@ class LlmGateway:
             total=time.perf_counter() - started,
         )
 
-        yield MetadataEvent(sources=self._sources(request))
+        yield MetadataEvent(
+            sources=self._sources(request),
+            disclaimer=self._context_disclaimer(request),
+        )
         yield DoneEvent(
             finish_reason=FinishReason.GUARDRAIL if blocked else FinishReason.STOP,
             usage=Usage(),

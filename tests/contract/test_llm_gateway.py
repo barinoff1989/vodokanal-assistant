@@ -449,3 +449,62 @@ def test_интерфейс_прогревает_шлюз_при_запуске(
         pass
 
     assert warmed == ["да"], "приложение не прогрело шлюз при запуске"
+
+
+# --- синтетический источник помечается (пункт 67) ----------------------------- #
+
+
+def _chunk(chunk_id: str, *, synthetic: bool) -> ContextChunk:
+    return ContextChunk(
+        chunk_id=chunk_id,
+        text="текст фрагмента",
+        source_title="документ",
+        relevance_score=0.9,
+        synthetic=synthetic,
+    )
+
+
+@pytest.mark.asyncio
+async def test_ответ_по_синтетике_помечен_оговоркой():
+    """Ответ по выдуманной процедуре обязан быть отличим от ответа по
+    настоящему регламенту — иначе на демонстрации его примут за второе."""
+    gateway = _gateway()
+    request = _request(context=[_chunk("doc#1", synthetic=True)])
+
+    response = await gateway.generate(request)
+
+    assert isinstance(response, GenerateResponse)
+    assert response.disclaimer
+    assert response.sources[0].synthetic is True
+
+
+@pytest.mark.asyncio
+async def test_ответ_по_настоящему_источнику_оговорки_не_несёт():
+    """Иначе оговорка обесценится: она стоит на каждом ответе и её перестают
+    читать."""
+    gateway = _gateway()
+    request = _request(context=[_chunk("faq-01", synthetic=False)])
+
+    response = await gateway.generate(request)
+
+    assert isinstance(response, GenerateResponse)
+    assert response.disclaimer is None
+    assert response.sources[0].synthetic is False
+
+
+@pytest.mark.asyncio
+async def test_хватает_одного_синтетического_фрагмента():
+    """Смесь настоящего и выдуманного — самый опасный случай: ответ выглядит
+    обоснованным, а часть его построена на составленной нами процедуре."""
+    gateway = _gateway()
+    request = _request(
+        context=[
+            _chunk("faq-01", synthetic=False),
+            _chunk("doc#2", synthetic=True),
+        ]
+    )
+
+    response = await gateway.generate(request)
+
+    assert isinstance(response, GenerateResponse)
+    assert response.disclaimer
