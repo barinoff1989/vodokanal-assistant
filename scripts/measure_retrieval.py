@@ -46,6 +46,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.config import Settings  # noqa: E402
+from app.kb.build import collect_items  # noqa: E402
 from app.kb.search import KnowledgeBase, SentenceTransformerEmbedder  # noqa: E402
 
 GOLDEN = ROOT / "golden_set" / "retrieval.json"
@@ -157,10 +158,11 @@ def main() -> None:
     print(f"загрузка модели: {load_seconds:.1f} с")
 
     started = time.perf_counter()
-    kb = KnowledgeBase.from_file(
-        ROOT / settings.kb_corpus_path,
-        embedder,
-        part_max_chars=settings.kb_part_max_chars,
+    # Индекс собирается тем же кодом, что и в сервисе: иначе замер мерил бы
+    # другую базу знаний. До выделения `app/kb/build.py` здесь стояло чтение
+    # одного корпуса FAQ, и документы Word в замер не попадали вовсе.
+    kb = KnowledgeBase.from_items(
+        collect_items(settings), embedder, part_max_chars=settings.kb_part_max_chars
     )
     index_seconds = time.perf_counter() - started
     print(f"индексация {len(kb)} фрагментов: {index_seconds:.2f} с")

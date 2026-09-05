@@ -208,9 +208,9 @@ def test_настройка_доходит_до_загрузчика_модел�
     оно осталось бы объявленным и неподключённым — тот же класс ошибки, что с
     прогревом (журнал, раздел 69)."""
     from app.config import get_settings
-    from app.main import _build_knowledge_base
+    from app.kb.build import build_knowledge_base
 
-    knowledge_base = _build_knowledge_base()
+    knowledge_base = build_knowledge_base()
     if knowledge_base is None:
         pytest.skip("корпус базы знаний не найден")
 
@@ -244,9 +244,9 @@ def _knowledge_base():
     Подменённая модель здесь не годится: проверяется, что вопрос и ответ попали
     в индекс порознь, а это свойство сборки, а не поиска.
     """
-    from app.main import _build_knowledge_base
+    from app.kb.build import build_knowledge_base
 
-    knowledge_base = _build_knowledge_base()
+    knowledge_base = build_knowledge_base()
     if knowledge_base is None:
         pytest.skip("корпус базы знаний не найден")
     return knowledge_base

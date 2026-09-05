@@ -21,13 +21,7 @@ from app.backend.orchestrator import Orchestrator
 from app.config import get_settings
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
-from app.kb.documents import load_directory
-from app.kb.search import (
-    KbItem,
-    KnowledgeBase,
-    SentenceTransformerEmbedder,
-    faq_items,
-)
+from app.kb.build import build_knowledge_base
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
 from app.regulated import RegulatedResponder
@@ -80,51 +74,6 @@ def _build_quota() -> QuotaManager | None:
         quota = None
 
     return quota
-
-
-def _build_knowledge_base() -> KnowledgeBase | None:
-    """Проиндексировать корпус, если он на месте.
-
-    Отсутствие корпуса — не отказ подняться: поиск выключается, модель отвечает
-    без опоры на регламенты. На прототипе это допустимо и заметно по журналу; на
-    MVP так работать нельзя, и там пустая база знаний должна ронять запуск.
-    """
-    settings = get_settings()
-    path = Path(settings.kb_corpus_path)
-    if not path.exists():
-        logger.warning("корпус базы знаний не найден (%s): поиск выключен", path)
-        return None
-
-    embedder = SentenceTransformerEmbedder(
-        settings.embedding_model,
-        local_files_only=settings.embedding_local_files_only,
-    )
-
-    items = faq_items(path)
-    # Документы Word — источники 2, 5 и 8 каталога. На прототипе они
-    # синтетические, и признак этого доходит до фрагмента, а оттуда до ответа.
-    sections = load_directory(Path(settings.kb_documents_path))
-    items.extend(
-        KbItem(
-            chunk_id=section.chunk_id,
-            title=section.heading,
-            body=section.body,
-            source_title=section.source_title,
-            source_url=None,
-            synthetic=section.synthetic,
-        )
-        for section in sections
-    )
-    if sections:
-        logger.info(
-            "документов базы знаний: %d фрагментов, синтетических %d",
-            len(sections),
-            sum(s.synthetic for s in sections),
-        )
-
-    return KnowledgeBase.from_items(
-        items, embedder, part_max_chars=settings.kb_part_max_chars
-    )
 
 
 def _build_outages() -> OutageResponder | None:
@@ -230,7 +179,7 @@ def create() -> object:
         gateway = LlmGateway(quota=quota, settings=settings)
 
     with _stage("база знаний: модель эмбеддингов и индексация"):
-        knowledge_base = _build_knowledge_base()
+        knowledge_base = build_knowledge_base()
 
     orchestrator = Orchestrator(
         gateway,
