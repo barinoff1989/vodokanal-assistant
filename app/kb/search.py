@@ -55,9 +55,11 @@ from app.models import ContextChunk
 
 __all__ = [
     "Embedder",
+    "KbItem",
     "KnowledgeBase",
     "SentenceTransformerEmbedder",
     "cosine",
+    "faq_items",
     "split_answer",
 ]
 
@@ -129,6 +131,37 @@ def split_answer(answer: str, max_chars: int) -> list[str]:
 
 
 @dataclass(frozen=True, slots=True)
+class KbItem:
+    """Запись корпуса до индексации — общая форма для всех источников.
+
+    :param title: то, что говорит, о чём текст: вопрос FAQ либо путь заголовков.
+    :param body: сам текст.
+    :param synthetic: собрана ли запись генератором, а не пришла от владельца.
+    """
+
+    chunk_id: str
+    title: str
+    body: str
+    source_title: str
+    source_url: str | None = None
+    synthetic: bool = False
+
+
+def faq_items(path: Path) -> list[KbItem]:
+    """Пары «вопрос-ответ» из корпуса FAQ."""
+    return [
+        KbItem(
+            chunk_id=item["chunk_id"],
+            title=item["question"],
+            body=item["answer"],
+            source_title=item["source_title"],
+            source_url=item["source_url"],
+        )
+        for item in json.loads(path.read_text(encoding="utf-8"))
+    ]
+
+
+@dataclass(frozen=True, slots=True)
 class _Entry:
     """Фрагмент корпуса вместе с векторами его частей.
 
@@ -160,30 +193,34 @@ class KnowledgeBase:
         return len(self._entries)
 
     @classmethod
-    def from_file(
-        cls, path: Path, embedder: Embedder, *, part_max_chars: int = 300
+    @classmethod
+    def from_items(
+        cls,
+        items: Sequence[KbItem],
+        embedder: Embedder,
+        *,
+        part_max_chars: int = 300,
     ) -> KnowledgeBase:
-        """Прочитать корпус и проиндексировать его целиком.
+        """Проиндексировать готовые записи, откуда бы они ни пришли.
 
-        :param part_max_chars: предел длины части ответа при разрезании.
+        :param items: записи корпуса — пара FAQ либо раздел документа.
+        :param part_max_chars: предел длины части тела при разрезании.
 
-        Индексация двадцати фрагментов занимает доли секунды (замер ADR-014: 48
-        фрагментов в секунду), поэтому делается при запуске, а не заранее. Когда
-        корпус вырастет, это станет отдельным шагом приёма — как у графика
-        отключений.
+        **Один код на два источника, потому что устройство у них одно.** У пары
+        FAQ вопрос и ответ; у раздела документа — путь заголовков и текст
+        раздела. Заголовок несёт ровно то же, что вопрос: он говорит, о чём
+        текст, словами, близкими к вопросу абонента. Значит и индексируются они
+        одинаково: заголовок отдельным вектором, тело — частями.
         """
-        items = json.loads(path.read_text(encoding="utf-8"))
-        texts = [f"{item['question']}\n{item['answer']}" for item in items]
+        views = [
+            (item.title, *split_answer(item.body, part_max_chars)) for item in items
+        ]
         # Части индексируются порознь, но одним вызовом: модель дорого поднимать,
         # а не звать, и разбивать вызов незачем.
         # Склейка «вопрос + ответ» отдельным видом **не берётся**: проверено
         # замером — hit@1, hit@3 и MRR не сдвинулись ни на единицу, а при
         # действующем пороге стало на один ответ хуже. Её близость всегда лежит
         # между близостями частей, то есть максимум её никогда не выбирает.
-        views = [
-            (item["question"], *split_answer(item["answer"], part_max_chars))
-            for item in items
-        ]
         encoded = embedder.encode(
             [PASSAGE_PREFIX + part for view in views for part in view]
         )
@@ -199,17 +236,35 @@ class KnowledgeBase:
         entries = [
             _Entry(
                 chunk=ContextChunk(
-                    chunk_id=item["chunk_id"],
-                    text=text,
-                    source_title=item["source_title"],
-                    source_url=item["source_url"],
+                    chunk_id=item.chunk_id,
+                    text="\n".join((item.title, item.body)),
+                    source_title=item.source_title,
+                    source_url=item.source_url,
+                    synthetic=item.synthetic,
                     relevance_score=0.0,
                 ),
                 vectors=tuple(vectors),
             )
-            for item, text, vectors in zip(items, texts, grouped, strict=True)
+            for item, vectors in zip(items, grouped, strict=True)
         ]
         return cls(entries, embedder)
+
+    @classmethod
+    def from_file(
+        cls, path: Path, embedder: Embedder, *, part_max_chars: int = 300
+    ) -> KnowledgeBase:
+        """Прочитать корпус FAQ и проиндексировать его целиком.
+
+        :param part_max_chars: предел длины части ответа при разрезании.
+
+        Индексация двадцати фрагментов занимает доли секунды (замер ADR-014: 48
+        фрагментов в секунду), поэтому делается при запуске, а не заранее. Когда
+        корпус вырастет, это станет отдельным шагом приёма — как у графика
+        отключений.
+        """
+        return cls.from_items(
+            faq_items(path), embedder, part_max_chars=part_max_chars
+        )
 
     def search(
         self, query: str, *, top_n: int, threshold: float, top_k: int | None = None

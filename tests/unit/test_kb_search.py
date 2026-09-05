@@ -265,9 +265,14 @@ def test_у_фрагмента_столько_векторов_сколько_ч
     corpus = json.loads(Path(settings.kb_corpus_path).read_text(encoding="utf-8"))
     knowledge_base = _knowledge_base()
 
-    for entry, item in zip(knowledge_base._entries, corpus, strict=True):
+    # Индекс собирается из двух источников: сначала пары FAQ, затем разделы
+    # документов Word. Проверяется первая часть — у неё известно ожидаемое
+    # число частей; вторая проверяется в test_kb_documents.py.
+    by_id = {e.chunk.chunk_id: e for e in knowledge_base._entries}
+    for item in corpus:
+        entry = by_id[item["chunk_id"]]
         parts = split_answer(item["answer"], settings.kb_part_max_chars)
-        assert len(entry.vectors) == 1 + len(parts), entry.chunk.chunk_id
+        assert len(entry.vectors) == 1 + len(parts), item["chunk_id"]
 
 
 def test_близость_берётся_по_лучшей_части_а_не_по_средней():

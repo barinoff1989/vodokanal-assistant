@@ -21,7 +21,13 @@ from app.backend.orchestrator import Orchestrator
 from app.config import get_settings
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
-from app.kb.search import KnowledgeBase, SentenceTransformerEmbedder
+from app.kb.documents import load_directory
+from app.kb.search import (
+    KbItem,
+    KnowledgeBase,
+    SentenceTransformerEmbedder,
+    faq_items,
+)
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
 from app.regulated import RegulatedResponder
@@ -93,8 +99,31 @@ def _build_knowledge_base() -> KnowledgeBase | None:
         settings.embedding_model,
         local_files_only=settings.embedding_local_files_only,
     )
-    return KnowledgeBase.from_file(
-        path, embedder, part_max_chars=settings.kb_part_max_chars
+
+    items = faq_items(path)
+    # Документы Word — источники 2, 5 и 8 каталога. На прототипе они
+    # синтетические, и признак этого доходит до фрагмента, а оттуда до ответа.
+    sections = load_directory(Path(settings.kb_documents_path))
+    items.extend(
+        KbItem(
+            chunk_id=section.chunk_id,
+            title=section.heading,
+            body=section.body,
+            source_title=section.source_title,
+            source_url=None,
+            synthetic=section.synthetic,
+        )
+        for section in sections
+    )
+    if sections:
+        logger.info(
+            "документов базы знаний: %d фрагментов, синтетических %d",
+            len(sections),
+            sum(s.synthetic for s in sections),
+        )
+
+    return KnowledgeBase.from_items(
+        items, embedder, part_max_chars=settings.kb_part_max_chars
     )
 
 
