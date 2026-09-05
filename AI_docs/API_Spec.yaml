@@ -627,6 +627,7 @@ components:
       - general
       - outage
       - water_quality
+      - tariff
       title: Topic
       type: string
     Usage:

@@ -25,6 +25,8 @@ from app.kb.search import KnowledgeBase, SentenceTransformerEmbedder
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
 from app.regulated import RegulatedResponder
+from app.tariffs.answer import TariffResponder
+from app.tariffs.store import TariffStore
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +154,22 @@ def _stage(name: str) -> Iterator[None]:
     logger.info("подъём: %s — готово за %.1f с", name, time.perf_counter() - started)
 
 
+def _build_tariffs() -> TariffResponder | None:
+    """Прочитать таблицу тарифов, если файл на месте.
+
+    Отметка актуальности берётся из самого файла (`fetched_on`), а не от времени
+    чтения: тариф меняется решением регулятора, и абоненту важно, когда прочитана
+    **страница**, а не когда поднялся сервис.
+    """
+    settings = get_settings()
+    path = Path(settings.tariff_table_path)
+    if not path.exists():
+        logger.warning("таблица тарифов не найдена (%s): ответы по ней выключены", path)
+        return None
+
+    return TariffResponder(TariffStore.from_file(path))
+
+
 def create() -> object:
     """Собрать приложение. Вынесено функцией ради проверок."""
     from app.api import create_app
@@ -172,9 +190,11 @@ def create() -> object:
 
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
     # реестр дешевле поиска по графику, а тем у него меньше.
-    with _stage("реестр ответов и график отключений"):
+    with _stage("прямые ответчики: реестр, тарифы, график отключений"):
         responders = tuple(
-            r for r in (_build_regulated(), _build_outages()) if r is not None
+            r
+            for r in (_build_regulated(), _build_tariffs(), _build_outages())
+            if r is not None
         )
 
     with _stage("слой защиты: обезличиватель и охранители"):
