@@ -92,16 +92,36 @@ def load_inquiries() -> list[dict[str, str]]:
         return list(csv.DictReader(handle, delimiter=DELIMITER))
 
 
-def load_corpus() -> dict[str, dict[str, str]]:
+def load_faq() -> dict[str, dict[str, str]]:
+    """Только корпус FAQ — из него берутся тексты вопросов подмножества `corpus`."""
     items = json.loads(CORPUS.read_text(encoding="utf-8"))
     return {item["chunk_id"]: item for item in items}
+
+
+def load_index_ids() -> set[str]:
+    """Опознаватели ВСЕХ фрагментов индекса, а не одного корпуса FAQ.
+
+    Ожидания разметки сверяются с полным индексом: после подключения документов
+    Word правильным ответом может быть раздел инструкции, а не пара FAQ. Пока
+    здесь стоял один FAQ, такая разметка падала бы с «фрагмента нет в корпусе»,
+    хотя фрагмент есть.
+
+    Берётся тем же кодом, что собирает индекс в сервисе (`app.kb.build`), —
+    иначе появился бы третий взгляд на то, из чего состоит база знаний.
+    """
+    from app.kb.build import collect_items
+
+    # Части фрагмента отдельных опознавателей не получают: разрезанный ответ —
+    # это несколько векторов ОДНОГО фрагмента, и в выдаче он остаётся одним.
+    return {item.chunk_id for item in collect_items()}
 
 
 def build() -> list[Question]:
     """Собрать набор, падая на первом же расхождении с источником."""
     labels = json.loads(LABELS.read_text(encoding="utf-8"))
     rows = load_inquiries()
-    corpus = load_corpus()
+    faq = load_faq()
+    index_ids = load_index_ids()
 
     questions: list[Question] = []
     seen: set[str] = set()
@@ -123,9 +143,9 @@ def build() -> list[Question]:
             origin = f"обращение, строка {row}"
         elif kind == "faq":
             chunk_id = source["chunk_id"]
-            if chunk_id not in corpus:
-                sys.exit(f"{ident}: фрагмента {chunk_id} нет в корпусе")
-            text = _normalize(corpus[chunk_id]["question"])
+            if chunk_id not in faq:
+                sys.exit(f"{ident}: фрагмента {chunk_id} нет в корпусе FAQ")
+            text = _normalize(faq[chunk_id]["question"])
             origin = f"вопрос корпуса {chunk_id}"
         elif kind == "invented":
             text = _normalize(source["text"])
@@ -137,8 +157,10 @@ def build() -> list[Question]:
             sys.exit(f"{ident}: текст вопроса пуст")
 
         for chunk_id in item["expected"]:
-            if chunk_id not in corpus:
-                sys.exit(f"{ident}: ожидается фрагмент {chunk_id}, которого нет в корпусе")
+            if chunk_id not in index_ids:
+                sys.exit(
+                    f"{ident}: ожидается фрагмент {chunk_id}, которого нет в индексе"
+                )
 
         questions.append(
             Question(
@@ -166,8 +188,8 @@ def report(questions: list[Question]) -> None:
     # Ни один вопрос не должен ожидать фрагмент, которого не ждёт никто другой,
     # незаметно для глаза: печать покрытия корпуса показывает перекос набора.
     covered = Counter(chunk for q in questions for chunk in q.expected)
-    corpus = load_corpus()
-    unused = sorted(set(corpus) - set(covered))
+    corpus = load_index_ids()
+    unused = sorted(corpus - set(covered))
     print(f"фрагментов корпуса под ожиданием: {len(covered)} из {len(corpus)}")
     if unused:
         print(f"  ни разу не ожидается: {', '.join(unused)}")

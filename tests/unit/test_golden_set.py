@@ -37,8 +37,30 @@ def items() -> list[dict]:
 
 
 @pytest.fixture(scope="module")
-def chunk_ids() -> set[str]:
+def faq_ids() -> set[str]:
+    """Опознаватели корпуса FAQ — он в репозитории и есть всегда."""
     return {item["chunk_id"] for item in json.loads(CORPUS.read_text(encoding="utf-8"))}
+
+
+@pytest.fixture(scope="module")
+def chunk_ids() -> set[str]:
+    """Опознаватели ВСЕГО индекса: FAQ плюс разделы документов Word.
+
+    Документы генерируются скриптом и в репозиторий не идут (`kb/*` исключён),
+    поэтому на чистой копии их нет. Проверки, которым они нужны, пропускаются с
+    указанием, что запустить, — молчаливого прохода тут быть не должно.
+    """
+    from app.kb.build import collect_items
+
+    return {item.chunk_id for item in collect_items()}
+
+
+def _need_documents(chunk_ids: set[str], faq_ids: set[str]) -> None:
+    if chunk_ids <= faq_ids:
+        pytest.skip(
+            "разделов документов нет в индексе; собрать: "
+            "python scripts/generate_kb_docs.py"
+        )
 
 
 def test_набор_нужного_размера(items):
@@ -60,9 +82,10 @@ def test_подмножества_известны(items):
         assert item["subset"] in SUBSETS, item["id"]
 
 
-def test_ожидаемые_фрагменты_существуют(items, chunk_ids):
+def test_ожидаемые_фрагменты_существуют(items, chunk_ids, faq_ids):
     """Опечатка в идентификаторе фрагмента дала бы вечный промах, неотличимый от
     настоящего промаха поиска."""
+    _need_documents(chunk_ids, faq_ids)
     for item in items:
         for chunk_id in item["expected"]:
             assert chunk_id in chunk_ids, f"{item['id']}: нет фрагмента {chunk_id}"
@@ -100,10 +123,16 @@ def test_настоящих_вопросов_подавляющее_больши
     assert invented / len(items) < 0.1
 
 
-def test_каждый_фрагмент_корпуса_кто_то_ждёт(items, chunk_ids):
-    """Иначе часть корпуса не проверяется вовсе, и её поломка пройдёт незаметно."""
+def test_каждую_пару_faq_кто_то_ждёт(items, faq_ids):
+    """Иначе часть корпуса не проверяется вовсе, и её поломка пройдёт незаметно.
+
+    **Проверяется FAQ, а не весь индекс.** Разделы документов ожидаются не все и
+    не должны: у инструкции есть служебные части — «Область применения», «Чего в
+    ответе быть не должно», — которые не отвечают ни на один вопрос абонента.
+    Требовать ожидания и от них значило бы вписать в разметку то, чего в ней
+    быть не может."""
     expected = {chunk for item in items for chunk in item["expected"]}
-    assert expected == chunk_ids
+    assert faq_ids <= expected
 
 
 @pytest.mark.skipif(

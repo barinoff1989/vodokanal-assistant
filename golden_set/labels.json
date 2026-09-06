@@ -9,110 +9,780 @@
     "control": "Выдуманный посторонний вопрос. Помечен как выдуманный намеренно: это единственные тексты набора, которых не было в жизни."
   },
   "items": [
-    {"id": "a-01", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-01"}, "expected": ["faq-01"]},
-    {"id": "a-02", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-02"}, "expected": ["faq-02"]},
-    {"id": "a-03", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-03"}, "expected": ["faq-03"]},
-    {"id": "a-04", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-04"}, "expected": ["faq-04"]},
-    {"id": "a-05", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-05"}, "expected": ["faq-05"]},
-    {"id": "a-06", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-06"}, "expected": ["faq-06"]},
-    {"id": "a-07", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-07"}, "expected": ["faq-07"]},
-    {"id": "a-08", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-08"}, "expected": ["faq-08"]},
-    {"id": "a-09", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-09"}, "expected": ["faq-09"]},
-    {"id": "a-10", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-10"}, "expected": ["faq-10"]},
-    {"id": "a-11", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-11"}, "expected": ["faq-11"]},
-    {"id": "a-12", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-12"}, "expected": ["faq-12"]},
-    {"id": "a-13", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-13"}, "expected": ["faq-13"]},
-    {"id": "a-14", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-14"}, "expected": ["faq-14"]},
-    {"id": "a-15", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-15"}, "expected": ["faq-15"]},
-    {"id": "a-16", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-16"}, "expected": ["faq-16"]},
-    {"id": "a-17", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-17"}, "expected": ["faq-17"]},
-    {"id": "a-18", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-18"}, "expected": ["faq-18"]},
-    {"id": "a-19", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-19"}, "expected": ["faq-19"]},
-    {"id": "a-20", "subset": "corpus", "source": {"kind": "faq", "chunk_id": "faq-20"}, "expected": ["faq-20"]},
-
-    {"id": "b-01", "subset": "real", "source": {"kind": "inquiry", "row": 3}, "expected": ["faq-10", "faq-09"],
-     "note": "Истёк межповерочный интервал, поверка подтвердила исправность, требует перерасчёт за период."},
-    {"id": "b-02", "subset": "real", "source": {"kind": "inquiry", "row": 4}, "expected": ["faq-09"],
-     "note": "Ссылается на п. 84 ППРФ 354 — обследование при непередаче показаний."},
-    {"id": "b-03", "subset": "real", "source": {"kind": "inquiry", "row": 16}, "expected": ["faq-03"],
-     "note": "Прибор учёта не виден в личном кабинете. FAQ объясняет тот же признак с другой стороны: истёк межповерочный интервал."},
-    {"id": "b-04", "subset": "real", "source": {"kind": "inquiry", "row": 17}, "expected": ["faq-13", "faq-16"],
-     "note": "Заменили прибор учёта, просит принять данные — опломбировка нового либо порядок установки."},
-    {"id": "b-05", "subset": "real", "source": {"kind": "inquiry", "row": 19}, "expected": ["faq-02"],
-     "note": "Нет квитанций, спрашивает основание задолженности."},
-    {"id": "b-06", "subset": "real", "source": {"kind": "inquiry", "row": 20}, "expected": ["faq-05", "faq-08"],
-     "note": "Перерасчёт по числу зарегистрированных плюс справка об отсутствии задолженности."},
-    {"id": "b-07", "subset": "real", "source": {"kind": "inquiry", "row": 23}, "expected": ["faq-07"],
-     "note": "В квартире никто не проживает."},
-    {"id": "b-08", "subset": "real", "source": {"kind": "inquiry", "row": 26}, "expected": ["faq-02", "faq-09"],
-     "note": "Квитанции приходят нерегулярно, откуда задолженность при оплате по счётчику."},
-    {"id": "b-09", "subset": "real", "source": {"kind": "inquiry", "row": 27}, "expected": ["faq-07", "faq-09"],
-     "note": "Показания не меняются, никто не живёт, долг растёт."},
-    {"id": "b-10", "subset": "real", "source": {"kind": "inquiry", "row": 31}, "expected": ["faq-13"],
-     "note": "Ввод ИПУ в эксплуатацию — это и есть опломбировка."},
-    {"id": "b-11", "subset": "real", "source": {"kind": "inquiry", "row": 32}, "expected": ["faq-13"]},
-    {"id": "b-12", "subset": "real", "source": {"kind": "inquiry", "row": 37}, "expected": ["faq-12"],
-     "note": "Повторная заявка на поверку."},
-    {"id": "b-13", "subset": "real", "source": {"kind": "inquiry", "row": 38}, "expected": ["faq-12"]},
-    {"id": "b-14", "subset": "real", "source": {"kind": "inquiry", "row": 56}, "expected": ["faq-02"],
-     "note": "Просит присылать квитанцию на почту; FAQ описывает электронную передачу начислений."},
-    {"id": "b-15", "subset": "real", "source": {"kind": "inquiry", "row": 59}, "expected": ["faq-08"]},
-    {"id": "b-16", "subset": "real", "source": {"kind": "inquiry", "row": 62}, "expected": ["faq-06"],
-     "note": "Продал квартиру, прилагает выписку ЕГРН."},
-    {"id": "b-17", "subset": "real", "source": {"kind": "inquiry", "row": 64}, "expected": ["faq-07"],
-     "note": "Помещение не используется, санузла нет."},
-    {"id": "b-18", "subset": "real", "source": {"kind": "inquiry", "row": 68}, "expected": ["faq-08", "faq-07"],
-     "note": "Перерасчёт по изменению числа проживающих."},
-    {"id": "b-19", "subset": "real", "source": {"kind": "inquiry", "row": 82}, "expected": ["faq-09"],
-     "note": "Долг из-за неверно переданных показаний."},
-    {"id": "b-20", "subset": "real", "source": {"kind": "inquiry", "row": 87}, "expected": ["faq-09", "faq-10"],
-     "note": "«Зачем поверяю счётчики, если считаете по нормативу» — оба FAQ отвечают на это с разных сторон."},
-    {"id": "b-21", "subset": "real", "source": {"kind": "inquiry", "row": 89}, "expected": ["faq-02"],
-     "note": "Не приходят квитанции при настроенном уведомлении по почте."},
-    {"id": "b-22", "subset": "real", "source": {"kind": "inquiry", "row": 100}, "expected": ["faq-11"]},
-    {"id": "b-23", "subset": "real", "source": {"kind": "inquiry", "row": 101}, "expected": ["faq-11"]},
-    {"id": "b-24", "subset": "real", "source": {"kind": "inquiry", "row": 102}, "expected": ["faq-11"],
-     "note": "Пени при положительном остатке на счёте."},
-    {"id": "b-25", "subset": "real", "source": {"kind": "inquiry", "row": 103}, "expected": ["faq-11"]},
-    {"id": "b-26", "subset": "real", "source": {"kind": "inquiry", "row": 104}, "expected": ["faq-01"],
-     "note": "Повышающий коэффициент при наличии счётчика."},
-    {"id": "b-27", "subset": "real", "source": {"kind": "inquiry", "row": 105}, "expected": ["faq-11"]},
-    {"id": "b-28", "subset": "real", "source": {"kind": "inquiry", "row": 106}, "expected": ["faq-11"]},
-    {"id": "b-29", "subset": "real", "source": {"kind": "inquiry", "row": 107}, "expected": ["faq-11"]},
-    {"id": "b-30", "subset": "real", "source": {"kind": "inquiry", "row": 108}, "expected": ["faq-11", "faq-08"],
-     "note": "Пени на пересчитанную задолженность плюс число зарегистрированных."},
-
-    {"id": "c-01", "subset": "no_answer", "source": {"kind": "inquiry", "row": 1}, "expected": [],
-     "note": "Перенос средств между услугами. В FAQ такого нет."},
-    {"id": "c-02", "subset": "no_answer", "source": {"kind": "inquiry", "row": 2}, "expected": [],
-     "note": "Повторное выставление квитанции за месяц."},
-    {"id": "c-03", "subset": "no_answer", "source": {"kind": "inquiry", "row": 5}, "expected": [],
-     "note": "Объём водоотведения выше объёма потребления. FAQ порядок расчёта водоотведения не описывает."},
-    {"id": "c-04", "subset": "no_answer", "source": {"kind": "inquiry", "row": 6}, "expected": [],
-     "note": "Возврат излишне уплаченного с банковскими реквизитами."},
-    {"id": "c-05", "subset": "no_answer", "source": {"kind": "inquiry", "row": 7}, "expected": []},
-    {"id": "c-06", "subset": "no_answer", "source": {"kind": "inquiry", "row": 24}, "expected": [],
-     "note": "Перенос аванса с полива на холодную воду."},
-    {"id": "c-07", "subset": "no_answer", "source": {"kind": "inquiry", "row": 25}, "expected": [],
-     "note": "Оплата прошла, долг остался."},
-    {"id": "c-08", "subset": "no_answer", "source": {"kind": "inquiry", "row": 66}, "expected": [],
-     "note": "Сообщение о смерти должника."},
-    {"id": "c-09", "subset": "no_answer", "source": {"kind": "inquiry", "row": 71}, "expected": [],
-     "note": "Долг в личном кабинете не совпадает с квитанцией."},
-    {"id": "c-10", "subset": "no_answer", "source": {"kind": "inquiry", "row": 83}, "expected": [],
-     "note": "Досылка платёжного документа к заявлению."},
-    {"id": "c-11", "subset": "no_answer", "source": {"kind": "inquiry", "row": 86}, "expected": [],
-     "note": "Оплата госпошлины не отражается в карточке счёта."},
-    {"id": "c-12", "subset": "no_answer", "source": {"kind": "inquiry", "row": 96}, "expected": [],
-     "note": "Отмена ранее поданной заявки."},
-
-    {"id": "d-01", "subset": "outage", "source": {"kind": "inquiry", "row": 18}, "expected": [],
-     "note": "«По адресу неделю нет холодной воды» — единственное обращение темы outage во всей выгрузке. До поиска не доходит: классификатор уводит его на график отключений."},
-
-    {"id": "e-01", "subset": "control", "source": {"kind": "invented", "text": "Как приготовить борщ?"}, "expected": [],
-     "note": "Посторонний вопрос, уже использовавшийся при подборе порога."},
-    {"id": "e-02", "subset": "control", "source": {"kind": "invented", "text": "Какой сегодня курс доллара?"}, "expected": []},
-    {"id": "e-03", "subset": "control", "source": {"kind": "invented", "text": "Как поменять счётчик электроэнергии?"}, "expected": [],
-     "note": "Коварный: про счётчик и про замену, но ресурс чужой. Ближе всего к faq-16 — если порог его пропустит, абонент получит ответ водоканала на вопрос энергосбыта."}
-  ]
+    {
+      "id": "a-01",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-01"
+      },
+      "expected": [
+        "faq-01"
+      ]
+    },
+    {
+      "id": "a-02",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-02"
+      },
+      "expected": [
+        "faq-02"
+      ]
+    },
+    {
+      "id": "a-03",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-03"
+      },
+      "expected": [
+        "faq-03"
+      ]
+    },
+    {
+      "id": "a-04",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-04"
+      },
+      "expected": [
+        "faq-04"
+      ]
+    },
+    {
+      "id": "a-05",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-05"
+      },
+      "expected": [
+        "faq-05"
+      ]
+    },
+    {
+      "id": "a-06",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-06"
+      },
+      "expected": [
+        "faq-06"
+      ]
+    },
+    {
+      "id": "a-07",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-07"
+      },
+      "expected": [
+        "faq-07"
+      ]
+    },
+    {
+      "id": "a-08",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-08"
+      },
+      "expected": [
+        "faq-08"
+      ]
+    },
+    {
+      "id": "a-09",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-09"
+      },
+      "expected": [
+        "faq-09"
+      ]
+    },
+    {
+      "id": "a-10",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-10"
+      },
+      "expected": [
+        "faq-10"
+      ]
+    },
+    {
+      "id": "a-11",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-11"
+      },
+      "expected": [
+        "faq-11"
+      ]
+    },
+    {
+      "id": "a-12",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-12"
+      },
+      "expected": [
+        "faq-12"
+      ]
+    },
+    {
+      "id": "a-13",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-13"
+      },
+      "expected": [
+        "faq-13"
+      ]
+    },
+    {
+      "id": "a-14",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-14"
+      },
+      "expected": [
+        "faq-14"
+      ]
+    },
+    {
+      "id": "a-15",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-15"
+      },
+      "expected": [
+        "faq-15"
+      ]
+    },
+    {
+      "id": "a-16",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-16"
+      },
+      "expected": [
+        "faq-16"
+      ]
+    },
+    {
+      "id": "a-17",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-17"
+      },
+      "expected": [
+        "faq-17"
+      ]
+    },
+    {
+      "id": "a-18",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-18"
+      },
+      "expected": [
+        "faq-18"
+      ]
+    },
+    {
+      "id": "a-19",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-19"
+      },
+      "expected": [
+        "faq-19"
+      ]
+    },
+    {
+      "id": "a-20",
+      "subset": "corpus",
+      "source": {
+        "kind": "faq",
+        "chunk_id": "faq-20"
+      },
+      "expected": [
+        "faq-20"
+      ]
+    },
+    {
+      "id": "b-01",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 3
+      },
+      "expected": [
+        "faq-10",
+        "faq-09",
+        "instrukciya-nachisleniya#3",
+        "instrukciya-nachisleniya#4"
+      ],
+      "note": "Истёк межповерочный интервал, поверка подтвердила исправность, требует перерасчёт за период."
+    },
+    {
+      "id": "b-02",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 4
+      },
+      "expected": [
+        "faq-09",
+        "instrukciya-nachisleniya#4"
+      ],
+      "note": "Ссылается на п. 84 ППРФ 354 — обследование при непередаче показаний."
+    },
+    {
+      "id": "b-03",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 16
+      },
+      "expected": [
+        "faq-03"
+      ],
+      "note": "Прибор учёта не виден в личном кабинете. FAQ объясняет тот же признак с другой стороны: истёк межповерочный интервал."
+    },
+    {
+      "id": "b-04",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 17
+      },
+      "expected": [
+        "faq-13",
+        "faq-16",
+        "meter_sealing#1",
+        "meter_sealing#2"
+      ],
+      "note": "Заменили прибор учёта, просит принять данные — опломбировка нового либо порядок установки."
+    },
+    {
+      "id": "b-05",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 19
+      },
+      "expected": [
+        "faq-02"
+      ],
+      "note": "Нет квитанций, спрашивает основание задолженности."
+    },
+    {
+      "id": "b-06",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 20
+      },
+      "expected": [
+        "faq-05",
+        "faq-08",
+        "certificate#1",
+        "certificate#2",
+        "instrukciya-nachisleniya#4"
+      ],
+      "note": "Перерасчёт по числу зарегистрированных плюс справка об отсутствии задолженности."
+    },
+    {
+      "id": "b-07",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 23
+      },
+      "expected": [
+        "faq-07",
+        "instrukciya-nachisleniya#4",
+        "instrukciya-nachisleniya#5"
+      ],
+      "note": "В квартире никто не проживает."
+    },
+    {
+      "id": "b-08",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 26
+      },
+      "expected": [
+        "faq-02",
+        "faq-09"
+      ],
+      "note": "Квитанции приходят нерегулярно, откуда задолженность при оплате по счётчику."
+    },
+    {
+      "id": "b-09",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 27
+      },
+      "expected": [
+        "faq-07",
+        "faq-09",
+        "instrukciya-nachisleniya#5"
+      ],
+      "note": "Показания не меняются, никто не живёт, долг растёт."
+    },
+    {
+      "id": "b-10",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 31
+      },
+      "expected": [
+        "faq-13",
+        "meter_sealing#1"
+      ],
+      "note": "Ввод ИПУ в эксплуатацию — это и есть опломбировка."
+    },
+    {
+      "id": "b-11",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 32
+      },
+      "expected": [
+        "faq-13",
+        "meter_sealing#1",
+        "meter_sealing#2"
+      ]
+    },
+    {
+      "id": "b-12",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 37
+      },
+      "expected": [
+        "faq-12",
+        "meter_verification#1",
+        "meter_verification#3",
+        "instrukciya-obshcheniye#3"
+      ],
+      "note": "Повторная заявка на поверку."
+    },
+    {
+      "id": "b-13",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 38
+      },
+      "expected": [
+        "faq-12",
+        "meter_verification#1",
+        "meter_verification#3"
+      ]
+    },
+    {
+      "id": "b-14",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 56
+      },
+      "expected": [
+        "faq-02"
+      ],
+      "note": "Просит присылать квитанцию на почту; FAQ описывает электронную передачу начислений."
+    },
+    {
+      "id": "b-15",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 59
+      },
+      "expected": [
+        "faq-08",
+        "instrukciya-nachisleniya#4",
+        "instrukciya-nachisleniya#7"
+      ]
+    },
+    {
+      "id": "b-16",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 62
+      },
+      "expected": [
+        "faq-06"
+      ],
+      "note": "Продал квартиру, прилагает выписку ЕГРН."
+    },
+    {
+      "id": "b-17",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 64
+      },
+      "expected": [
+        "faq-07",
+        "instrukciya-nachisleniya#4",
+        "instrukciya-nachisleniya#5"
+      ],
+      "note": "Помещение не используется, санузла нет."
+    },
+    {
+      "id": "b-18",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 68
+      },
+      "expected": [
+        "faq-08",
+        "faq-07",
+        "instrukciya-nachisleniya#4",
+        "instrukciya-nachisleniya#5"
+      ],
+      "note": "Перерасчёт по изменению числа проживающих."
+    },
+    {
+      "id": "b-19",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 82
+      },
+      "expected": [
+        "faq-09",
+        "instrukciya-nachisleniya#3"
+      ],
+      "note": "Долг из-за неверно переданных показаний."
+    },
+    {
+      "id": "b-20",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 87
+      },
+      "expected": [
+        "faq-09",
+        "faq-10",
+        "instrukciya-nachisleniya#2"
+      ],
+      "note": "«Зачем поверяю счётчики, если считаете по нормативу» — оба FAQ отвечают на это с разных сторон."
+    },
+    {
+      "id": "b-21",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 89
+      },
+      "expected": [
+        "faq-02"
+      ],
+      "note": "Не приходят квитанции при настроенном уведомлении по почте."
+    },
+    {
+      "id": "b-22",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 100
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-23",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 101
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-24",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 102
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ],
+      "note": "Пени при положительном остатке на счёте."
+    },
+    {
+      "id": "b-25",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 103
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-26",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 104
+      },
+      "expected": [
+        "faq-01",
+        "instrukciya-nachisleniya#2",
+        "instrukciya-nachisleniya#5"
+      ],
+      "note": "Повышающий коэффициент при наличии счётчика."
+    },
+    {
+      "id": "b-27",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 105
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-28",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 106
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-29",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 107
+      },
+      "expected": [
+        "faq-11",
+        "instrukciya-nachisleniya#6"
+      ]
+    },
+    {
+      "id": "b-30",
+      "subset": "real",
+      "source": {
+        "kind": "inquiry",
+        "row": 108
+      },
+      "expected": [
+        "faq-11",
+        "faq-08",
+        "instrukciya-nachisleniya#6"
+      ],
+      "note": "Пени на пересчитанную задолженность плюс число зарегистрированных."
+    },
+    {
+      "id": "c-01",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 1
+      },
+      "expected": [],
+      "note": "Перенос средств между услугами. В FAQ такого нет."
+    },
+    {
+      "id": "c-02",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 2
+      },
+      "expected": [],
+      "note": "Повторное выставление квитанции за месяц."
+    },
+    {
+      "id": "c-03",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 5
+      },
+      "expected": [],
+      "note": "Объём водоотведения выше объёма потребления. FAQ порядок расчёта водоотведения не описывает."
+    },
+    {
+      "id": "c-04",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 6
+      },
+      "expected": [],
+      "note": "Возврат излишне уплаченного с банковскими реквизитами."
+    },
+    {
+      "id": "c-05",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 7
+      },
+      "expected": []
+    },
+    {
+      "id": "c-06",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 24
+      },
+      "expected": [],
+      "note": "Перенос аванса с полива на холодную воду."
+    },
+    {
+      "id": "c-07",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 25
+      },
+      "expected": [],
+      "note": "Оплата прошла, долг остался."
+    },
+    {
+      "id": "c-08",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 66
+      },
+      "expected": [],
+      "note": "Сообщение о смерти должника."
+    },
+    {
+      "id": "c-09",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 71
+      },
+      "expected": [],
+      "note": "Долг в личном кабинете не совпадает с квитанцией."
+    },
+    {
+      "id": "c-10",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 83
+      },
+      "expected": [],
+      "note": "Досылка платёжного документа к заявлению."
+    },
+    {
+      "id": "c-11",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 86
+      },
+      "expected": [],
+      "note": "Оплата госпошлины не отражается в карточке счёта."
+    },
+    {
+      "id": "c-12",
+      "subset": "no_answer",
+      "source": {
+        "kind": "inquiry",
+        "row": 96
+      },
+      "expected": [],
+      "note": "Отмена ранее поданной заявки."
+    },
+    {
+      "id": "d-01",
+      "subset": "outage",
+      "source": {
+        "kind": "inquiry",
+        "row": 18
+      },
+      "expected": [],
+      "note": "«По адресу неделю нет холодной воды» — единственное обращение темы outage во всей выгрузке. До поиска не доходит: классификатор уводит его на график отключений."
+    },
+    {
+      "id": "e-01",
+      "subset": "control",
+      "source": {
+        "kind": "invented",
+        "text": "Как приготовить борщ?"
+      },
+      "expected": [],
+      "note": "Посторонний вопрос, уже использовавшийся при подборе порога."
+    },
+    {
+      "id": "e-02",
+      "subset": "control",
+      "source": {
+        "kind": "invented",
+        "text": "Какой сегодня курс доллара?"
+      },
+      "expected": []
+    },
+    {
+      "id": "e-03",
+      "subset": "control",
+      "source": {
+        "kind": "invented",
+        "text": "Как поменять счётчик электроэнергии?"
+      },
+      "expected": [],
+      "note": "Коварный: про счётчик и про замену, но ресурс чужой. Ближе всего к faq-16 — если порог его пропустит, абонент получит ответ водоканала на вопрос энергосбыта."
+    }
+  ],
+  "_переразметка": "6 сентября 2026. Первая разметка делалась, когда корпус состоял из двадцати пар FAQ; после подключения документов (51 фрагмент) промахом считался случай, когда нашёлся раздел документа вместо ожидаемого фрагмента FAQ, — то есть замер перестал мерить качество. Размечено заново ПО СОДЕРЖАНИЮ фрагментов, а не по тому, что вернул поиск: иначе разметка подогналась бы под ответ, и это худший вид утечки. Фрагменты FAQ из ожиданий не убирались — только добавлялись разделы документов, которые отвечают на вопрос."
 }
