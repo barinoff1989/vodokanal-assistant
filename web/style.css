@@ -171,6 +171,14 @@ body {
   font-size: 12px; color: var(--ink-muted);
 }
 .sources b { color: var(--ink); font-weight: 600; }
+.sources .score { color: var(--ink-muted); font-variant-numeric: tabular-nums; opacity: .75; }
+/* Пометка происхождения намеренно заметная: ответ по составленному нами
+   документу не должен выглядеть как ответ по регламенту водоканала. */
+.sources .synthetic {
+  color: #7A5C00; background: #FFF4D6; border: 1px solid #E8D08A;
+  border-radius: 3px; padding: 0 5px; font-size: 11px; white-space: nowrap;
+}
+.sources .disclaimer { margin-top: 6px; color: #7A5C00; line-height: 1.45; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .actions button {

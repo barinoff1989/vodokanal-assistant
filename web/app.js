@@ -109,13 +109,36 @@ function addMessage(role, text, extraClass) {
   return item.querySelector(".text");
 }
 
-function renderSources(node, sources) {
-  if (!sources || !sources.length) return;
+function renderSources(node, sources, disclaimer) {
+  if ((!sources || !sources.length) && !disclaimer) return;
   const block = document.createElement("div");
   block.className = "sources";
-  block.innerHTML =
-    "<b>Источники:</b> " +
-    sources.map((s) => escape(s.source_title || s.chunk_id)).join(" · ");
+
+  if (sources && sources.length) {
+    // Рядом с каждым источником — его близость и пометка происхождения.
+    // Близость показана потому, что порог 0,872 подобран замером и на защите
+    // спросят, почему найдено именно это; без числа ответить нечем.
+    const items = sources.map((s) => {
+      const title = escape(s.source_title || s.chunk_id);
+      const score = typeof s.relevance_score === "number"
+        ? ' <span class="score">' + s.relevance_score.toFixed(3) + "</span>"
+        : "";
+      // Ответ по документу, который написали мы, обязан быть отличим от ответа
+      // по настоящему регламенту водоканала (ADR-012 предостерегает ровно от
+      // смешения). Признак приходит с источником, а не выводится здесь заново.
+      const mark = s.synthetic ? ' <span class="synthetic">демо-документ</span>' : "";
+      return title + score + mark;
+    });
+    block.innerHTML = "<b>Источники:</b> " + items.join(" · ");
+  }
+
+  if (disclaimer) {
+    const note = document.createElement("div");
+    note.className = "disclaimer";
+    note.textContent = disclaimer;
+    block.appendChild(note);
+  }
+
   node.parentElement.appendChild(block);
 }
 
@@ -254,7 +277,7 @@ async function ask(question) {
           ui.feed.scrollTop = ui.feed.scrollHeight;
           logEvent("token", JSON.stringify(event.data.delta));
         } else if (event.name === "metadata") {
-          renderSources(node, event.data.sources);
+          renderSources(node, event.data.sources, event.data.disclaimer);
           renderActions(node, event.data.suggested_actions);
           logEvent("metadata", (event.data.sources || []).length + " источник(ов)");
         } else if (event.name === "done") {
