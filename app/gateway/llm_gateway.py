@@ -276,6 +276,14 @@ class LlmGateway:
         stream: bool,
     ) -> Any:
         """Обратиться к модели через LiteLLM либо через подменённую функцию."""
+        extra: dict[str, Any] = {}
+        if stream:
+            # Без этого расход в потоке не приходит вовсе, и учёт токенов
+            # оказывается нулевым на ЕДИНСТВЕННОМ пути, которым ходит абонент
+            # (правило 4.3 требует потока). Проверено на обоих провайдерах:
+            # без параметра кусков с `usage` ноль, с ним — ровно один, последний.
+            extra["stream_options"] = {"include_usage": True}
+
         if self._completion is not None:
             return await self._completion(
                 model=self._settings.llm_provider,
@@ -283,6 +291,7 @@ class LlmGateway:
                 max_tokens=request.parameters.max_tokens,
                 temperature=request.parameters.temperature,
                 stream=stream,
+                **extra,
             )
 
         return await self._router().acompletion(
@@ -291,6 +300,7 @@ class LlmGateway:
             max_tokens=request.parameters.max_tokens,
             temperature=request.parameters.temperature,
             stream=stream,
+            **extra,
         )
 
     def _router(self) -> Any:
@@ -422,10 +432,20 @@ class LlmGateway:
         blocked = False
         first_delta_at: float | None = None
         answering_model = ""
+        usage = Usage()
+        """Расход остаётся нулевым, если провайдер его не прислал.
+
+        Ноль здесь честнее выдумки: он виден в метрике как отсутствие данных,
+        а не как бесплатный запрос."""
 
         async for piece in raw_stream:
             if not answering_model:
                 answering_model = str(getattr(piece, "model", ""))
+            # Расход приходит ОТДЕЛЬНЫМ последним куском, у которого нет текста.
+            # Поэтому он снимается до проверки на пустую дельту: иначе `continue`
+            # ниже выбросил бы именно тот кусок, ради которого всё и делается.
+            if (piece_usage := _extract_usage(piece)) != Usage():
+                usage = piece_usage
             delta = _extract_delta(piece)
             if not delta:
                 continue
@@ -456,6 +476,12 @@ class LlmGateway:
             ttft=first_delta_at,
             total=time.perf_counter() - started,
         )
+        # Тот же учёт, что и в непотоковом пути. Пока его здесь не было, метрика
+        # `llm_gateway_tokens_total` наполнялась только служебными вызовами, а
+        # триггер №2 ADR-002 и прогноз OPEX считались по ним же.
+        metrics.record_tokens(
+            prompt=usage.prompt_tokens, completion=usage.completion_tokens
+        )
 
         yield MetadataEvent(
             sources=self._sources(request),
@@ -463,7 +489,7 @@ class LlmGateway:
         )
         yield DoneEvent(
             finish_reason=FinishReason.GUARDRAIL if blocked else FinishReason.STOP,
-            usage=Usage(),
+            usage=usage,
             pii_report=report,
             routing={
                 "provider": self._settings.llm_provider,

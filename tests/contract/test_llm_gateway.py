@@ -508,3 +508,97 @@ async def test_хватает_одного_синтетического_фраг
 
     assert isinstance(response, GenerateResponse)
     assert response.disclaimer
+
+
+# --- учёт токенов в потоке (пункт 70) ----------------------------------------- #
+
+
+class _UsageOnly:
+    """Последний кусок провайдера: расход есть, текста нет.
+
+    Форма снята с настоящего ответа, а не придумана: и YandexGPT, и локальная
+    Qwen через Ollama присылают `usage` **отдельным последним куском** при
+    `stream_options={"include_usage": True}`. Текстовые куски расхода не несут.
+    """
+
+    def __init__(self, prompt: int, completion: int) -> None:
+        self.choices = []
+        self.usage = type(
+            "U", (), {"prompt_tokens": prompt, "completion_tokens": completion}
+        )()
+        self.model = "stub"
+
+
+class _TextOnly:
+    """Обычный кусок потока: текст есть, расхода нет."""
+
+    def __init__(self, content: str) -> None:
+        self.choices = [_Choice(content)]
+        self.usage = None
+        self.model = "stub"
+
+
+def usage_completion(answer: str, *, prompt: int, completion: int):
+    """Провайдер, ведущий себя как настоящий: расход отдельным куском в конце."""
+
+    async def _call(*, stream: bool, **kwargs: Any) -> Any:
+        if not stream:
+            return _Response(answer)
+
+        async def _pieces() -> AsyncIterator[Any]:
+            for word in answer.split(" "):
+                yield _TextOnly(word + " ")
+            yield _UsageOnly(prompt, completion)
+
+        return _pieces()
+
+    return _call
+
+
+@pytest.mark.asyncio
+async def test_расход_из_последнего_куска_доходит_до_события_завершения():
+    """Кусок с расходом не несёт текста, и его легко потерять.
+
+    В цикле стоит `continue` для пустой дельты; сними расход после него — и учёт
+    останется нулевым, причём незаметно: событие `done` придёт как обычно."""
+    gateway = _gateway(completion=usage_completion("два слова", prompt=120, completion=7))
+    events = await _collect(gateway, _request())
+
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert len(done) == 1
+    assert done[0].usage.prompt_tokens == 120
+    assert done[0].usage.completion_tokens == 7
+
+
+@pytest.mark.asyncio
+async def test_потоковый_путь_запрашивает_расход_у_провайдера():
+    """Без `stream_options` провайдер расход не присылает вовсе — проверено на
+    обоих. Параметр обязан уходить именно в потоковом вызове."""
+    seen: dict[str, Any] = {}
+
+    async def capturing(*, stream: bool, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        seen["stream"] = stream
+        return await usage_completion("ответ", prompt=1, completion=1)(
+            stream=stream, **kwargs
+        )
+
+    gateway = _gateway(completion=capturing)
+    await _collect(gateway, _request())
+
+    assert seen["stream"] is True
+    assert seen.get("stream_options") == {"include_usage": True}
+
+
+@pytest.mark.asyncio
+async def test_молчание_провайдера_о_расходе_не_ломает_поток():
+    """Провайдер может не прислать расход — тогда ноль, но ответ доходит.
+
+    Ноль честнее выдумки: в метрике он виден как отсутствие данных, а не как
+    бесплатный запрос."""
+    gateway = _gateway(completion=fake_completion("ответ без расхода"))
+    events = await _collect(gateway, _request())
+
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert len(done) == 1
+    assert [e for e in events if isinstance(e, TokenEvent)]

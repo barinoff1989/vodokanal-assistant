@@ -283,10 +283,13 @@ async function ask(question) {
           const usage = event.data.usage || {};
           const spent = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
           tokensUsed += spent;
-          // Провайдер не отдаёт расход в потоковом режиме; учёт появится на
-          // шаге 10 вместе с телеметрией, а пока честнее показать прочерк,
-          // чем ноль, который выглядит как «ничего не потрачено».
-          ui.tokens.textContent = tokensUsed > 0 ? String(tokensUsed) : "— (учёт на шаге 10)";
+          // Расход приходит в событии завершения. Прежде здесь стоял прочерк
+          // с пометкой «учёт на шаге 10»: считалось, что провайдер не отдаёт
+          // расход в потоке. Он отдаёт — если попросить `stream_options`
+          // (проверено на YandexGPT и на локальной Qwen). Прочерк остаётся
+          // только на случай, когда провайдер промолчал: ноль выглядел бы как
+          // «ничего не потрачено».
+          ui.tokens.textContent = tokensUsed > 0 ? String(tokensUsed) : "— (провайдер не прислал)";
           logEvent("done", event.data.finish_reason || "stop");
         } else if (event.name === "error") {
           node.parentElement.classList.add("problem");
