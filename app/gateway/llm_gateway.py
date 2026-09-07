@@ -173,24 +173,29 @@ class LlmGateway:
         )
 
     def _prepare(self, request: GenerateRequest) -> tuple[list[dict[str, str]], PiiReport]:
-        """Собрать сообщения для модели, обезличив всё, что уходит наружу.
+        """Собрать сообщения для модели, обезличив вопрос абонента.
 
-        Обезличивается не только вопрос абонента, но и найденный контекст:
-        фрагменты базы знаний в теории могут содержать пример с настоящими
-        данными, и правило 4.2 не делает для них исключения.
+        **Контекст из базы знаний не обезличивается (ADR-015).** Прежняя
+        редакция чистила и его — «фрагменты в теории могут содержать пример с
+        настоящими данными». На практике теория обошлась дороже: на вопрос про
+        перерасчёт модель получала «3. ⟨ФИО⟩ выполняется по заявлению абонента»,
+        где ⟨ФИО⟩ — это слово «Перерасчёт», а ⟨АДРЕС⟩ — заголовок колонки
+        «Документы».
+
+        Ошибка была в постановке, а не в фильтре. Обезличиватель сделан для
+        текста **неизвестного** происхождения. Корпус базы знаний —
+        происхождения известного: его собрали мы и проиндексировали заранее,
+        значит проверить его можно один раз при приёме, где у находки есть
+        последствие (документ не берётся), а не на каждом ответе, где
+        последствие одно — порча текста.
+
+        Тот же приём, что в ADR-012: проверки не отменены, а сдвинуты ко входу.
+        Проверка живёт в `app/kb/build.py` и **роняет** сборку корпуса.
         """
         sanitize_started = time.perf_counter()
         clean_query, report = self._sanitizer.sanitize(request.query)
 
-        pieces: list[str] = []
-        for chunk in request.context:
-            clean_chunk, chunk_report = self._sanitizer.sanitize(chunk.text)
-            pieces.append(f"[{chunk.source_title}]\n{clean_chunk}")
-            if chunk_report.pii_detected:
-                report = PiiReport(
-                    pii_detected=True,
-                    entities=sorted(set(report.entities) | set(chunk_report.entities)),
-                )
+        pieces = [f"[{chunk.source_title}]\n{chunk.text}" for chunk in request.context]
 
         metrics.PII_SANITIZE_SECONDS.observe(time.perf_counter() - sanitize_started)
         metrics.record_pii(report.entities)

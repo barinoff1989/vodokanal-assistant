@@ -274,8 +274,18 @@ async def test_данные_абонента_не_уходят_провайде�
     assert "1234567890" not in str(seen["messages"])
 
 
-async def test_контекст_тоже_обезличивается():
-    """Фрагмент базы знаний может содержать пример с настоящими данными."""
+async def test_контекст_уходит_модели_как_есть():
+    """Обратное прежнему поведению — и это решение ADR-015, а не послабление.
+
+    Контекст больше не обезличивается: обезличиватель сделан для текста
+    неизвестного происхождения, а корпус собрали мы. На вопрос про перерасчёт
+    модель получала «3. ⟨ФИО⟩ выполняется по заявлению абонента», где ⟨ФИО⟩ —
+    слово «Перерасчёт».
+
+    Гарантия не исчезла, а переехала ко входу: документ с персональными данными
+    не попадает в корпус вовсе (`check_no_personal_data`), и проверка на это
+    стоит в `tests/unit/test_kb_build.py`.
+    """
     seen: dict[str, Any] = {}
 
     async def capturing(*, messages: list[dict[str, str]], **kwargs: Any) -> Any:
@@ -286,11 +296,37 @@ async def test_контекст_тоже_обезличивается():
         context=[
             ContextChunk(
                 chunk_id="c1",
-                text="Пример заявления: л/с 9998887770, прошу перерасчёт",
-                source_title="Образец",
+                text="Перерасчёт выполняется по заявлению. Документы: заявление, акт",
+                source_title="Инструкция",
                 relevance_score=0.8,
             )
         ]
+    )
+    await _gateway(completion=capturing).generate(request)
+    sent = str(seen["messages"])
+    assert "Перерасчёт выполняется по заявлению" in sent
+    assert "Документы: заявление, акт" in sent
+    assert "<ФИО>" not in sent and "<АДРЕС>" not in sent
+
+
+async def test_вопрос_абонента_обезличивается_по_прежнему():
+    """ADR-015 сузил правило 4.2, а не отменил его."""
+    seen: dict[str, Any] = {}
+
+    async def capturing(*, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+        seen["messages"] = messages
+        return _Response("ответ")
+
+    request = _request(
+        query="Мой лицевой счёт 9998887770, прошу перерасчёт",
+        context=[
+            ContextChunk(
+                chunk_id="c1",
+                text="Перерасчёт выполняется по заявлению абонента.",
+                source_title="Инструкция",
+                relevance_score=0.8,
+            )
+        ],
     )
     await _gateway(completion=capturing).generate(request)
     assert "9998887770" not in str(seen["messages"])
