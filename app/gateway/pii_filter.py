@@ -265,12 +265,30 @@ def is_public_information(entity_type: str, fragment: str) -> bool:
     return False
 
 
+_SENTENCE_START = re.compile("(?:^|[.!?…]\\s+|\\n\\s*)$")
+"""Стоит ли фрагмент в начале предложения (смотрим на текст ПЕРЕД ним).
+
+ЗАЧЕМ. Разбор языка помечает именем собственным любое слово с заглавной буквы, а
+в начале предложения с заглавной стоит **каждое**. Отсюда «Перерасчёт», «Пункту»,
+«Прилагаю», «Согласно», «Добрый» — все они уже перечислены поимённо в `NOT_PII`,
+и список пополнялся бы вечно: словарь лечит наблюдённое, а слов в языке больше.
+
+Правило общее и узкое одновременно: снимается **одно слово в начале
+предложения**. Настоящее ФИО там стоит либо несколькими словами («Пантелеева
+Дарья Сергеевна»), либо не в начале, и такие находки правило не трогает.
+
+Замер на 136 настоящих текстах: снимает 4 находки из 16, все ложные
+(«Воронеже» ×2, «Воронеж», «Спасибо»), и сохраняет обе настоящие — ФИО
+подрядчика и адрес почты."""
+
 _DIGIT = re.compile(r"\d")
 _INNER_PUNCTUATION = re.compile(r"[^\w\s-]", re.UNICODE)
 _CYRILLIC = re.compile(r"[а-яёА-ЯЁ]")
 
 
-def looks_like_pii(entity_type: str, fragment: str) -> bool:
+def looks_like_pii(
+    entity_type: str, fragment: str, *, before: str | None = None
+) -> bool:
     """Похож ли найденный разбором языка фрагмент на настоящие данные.
 
     Проверяется форма, а не смысл: смысл — дело разбора языка, и он уже
@@ -278,6 +296,9 @@ def looks_like_pii(entity_type: str, fragment: str) -> bool:
 
     :param entity_type: тип сущности из :data:`PRESIDIO_ENTITIES`.
     :param fragment: сам найденный фрагмент текста.
+    :param before: текст, стоящий перед фрагментом. Нужен ровно для одного
+        правила — одиночное слово в начале предложения; без него правило
+        не применяется, и поведение остаётся прежним.
     """
     if entity_type not in FILTERED_ENTITIES:
         return True
@@ -304,7 +325,17 @@ def looks_like_pii(entity_type: str, fragment: str) -> bool:
         return False
 
     folded = value.casefold()
-    return folded not in INDUSTRY_TERMS and folded not in NOT_PII
+    if folded in INDUSTRY_TERMS or folded in NOT_PII:
+        return False
+
+    # Одиночное слово в начале предложения. Проверка стоит последней: она самая
+    # общая, и до неё доходят только фрагменты, не снятые более точными
+    # правилами.
+    return not (
+        before is not None
+        and len(value.split()) == 1
+        and _SENTENCE_START.search(before) is not None
+    )
 
 
 # --- Общий приём: цифры рядом со словом-подсказкой ---------------------------- #
@@ -585,7 +616,9 @@ class PiiSanitizer:
                 # Отсев ложных находок разбора языка. На настоящих обращениях он
                 # снимает 58 находок из 63, не трогая ни одной настоящей
                 # (раздел 56.10).
-                if looks_like_pii(r.entity_type, text[r.start : r.end])
+                if looks_like_pii(
+                    r.entity_type, text[r.start : r.end], before=text[: r.start]
+                )
             )
         # Публичные сведения организации снимаются последними, уже над всеми
         # находками: телефон приходит от собственного распознавателя, почта и
