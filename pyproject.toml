@@ -25,6 +25,9 @@ dependencies = [
     "prometheus-client",
     "pyyaml",
     "redis",
+    # Шаг 9: обращения на прототипе пишутся в Postgres — микросервиса владельца
+    # внутри закрытой сети нет (ADR-009, `app/inquiries/store.py`).
+    "psycopg[binary]",
 ]
 
 [project.optional-dependencies]
