@@ -150,33 +150,58 @@ function renderActions(node, actions) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = action.label || action.action;
-    // Этап 2 на прототипе не разворачивается: кнопка показывает устройство
-    // пути записи, а не выполняет его.
-    button.addEventListener("click", () => showConfirmation(action.label || action.action));
+    button.addEventListener("click", () => chooseAction(action, block));
     block.appendChild(button);
   });
   node.parentElement.appendChild(block);
 }
 
+/*
+  Что делает нажатие.
+
+  Отказ уходит сразу: отменить черновик — действие безобидное, и переспрашивать
+  «точно ли отменить» значит мешать.
+
+  Подтверждение сначала открывает диалог с самим черновиком. Это и есть привал
+  HITL из правила 4.7: случайное нажатие на подсказку под ответом не должно
+  создавать обращение, а перед записью абонент обязан увидеть, что именно
+  подтверждает.
+
+  Кнопки после нажатия гаснут: черновик один, и второе нажатие относилось бы
+  уже не к нему.
+*/
+function chooseAction(action, block) {
+  block.querySelectorAll("button").forEach((button) => (button.disabled = true));
+  if (action.action === "reject") {
+    ask("Отменить", "reject");
+    return;
+  }
+  showConfirmation();
+}
+
 /* --- подтверждение операции записи (правило 4.7) --------------------------- */
 
-function showConfirmation(what) {
-  ui.confirmBody.textContent =
-    'Будет выполнено действие: "' + what + '".\n' +
-    "Ни одна операция записи не выполняется до этого подтверждения.";
+function showConfirmation() {
+  // Черновик берётся из последнего ответа помощника: сервер показал его текстом,
+  // и подтверждать абонент должен ровно то, что прочитал. Собрать текст здесь
+  // заново значило бы показать одно, а отправить другое.
+  const answers = ui.feed.querySelectorAll(".msg.assistant .text");
+  const last = answers.length ? answers[answers.length - 1].textContent : "";
+  const from = last.indexOf("Могу оформить обращение:");
+  ui.confirmBody.textContent = from >= 0 ? last.slice(from) : last;
   ui.confirm.hidden = false;
 }
 
 ui.confirmYes.addEventListener("click", () => {
   ui.confirm.hidden = true;
-  addMessage("assistant", "Этап 2 на прототипе не разворачивается: запись не выполнялась. " +
-    "Отказ и подтверждение в рабочем контуре одинаково попадают в аудит.");
+  // Текст реплики нужен ленте диалога; решение принимает признак `intent`, а не
+  // эти слова: правило 4.7 не признаёт подтверждением свободный текст.
+  ask("Подтверждаю", "confirm");
 });
 
 ui.confirmNo.addEventListener("click", () => {
   ui.confirm.hidden = true;
-  addMessage("assistant", "Отменено. В рабочем контуре отказ тоже записывается в аудит — " +
-    "с пометкой, что запись не выполнялась.");
+  ask("Отменить", "reject");
 });
 
 /* --- служебная панель ------------------------------------------------------ */
@@ -200,8 +225,13 @@ function setState(text, kind) {
 
 /* --- обращение к шлюзу ----------------------------------------------------- */
 
-async function ask(question) {
+async function ask(question, intent) {
   const subscriber = currentSubscriber();
+  if (intent) {
+    // Нажатие кнопки — тоже реплика абонента, и в ленте она должна быть видна:
+    // иначе ответ «Обращение зарегистрировано» выглядит взявшимся ниоткуда.
+    addMessage("user", question);
+  }
   const node = addMessage("assistant", "");
   node.classList.add("typing");
 
@@ -226,6 +256,9 @@ async function ask(question) {
         context: [],
         parameters: { stream: true },
         metadata: {
+          // Намерение уходит признаком, а не словом в тексте: сервер по нему и
+          // только по нему решает, выполнять ли запись (правило 4.7).
+          ...(intent ? { intent: intent } : {}),
           subscriber_id: subscriber.id,
           session_id: SESSION_ID,
           channel: "lk_web",
