@@ -45,6 +45,8 @@ from typing import Protocol
 
 from app.agents.advisor import Advisor
 from app.agents.triage import Triage
+from app.backend.registration import Registrar
+from app.backend.sessions import SessionStore, SubscriberMismatch
 from app.config import Settings, get_settings
 from app.gateway.llm_gateway import GatewayEvent, LlmGateway
 from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
@@ -58,6 +60,8 @@ from app.models import (
     GenerateResponse,
     MetadataEvent,
     ProblemDetail,
+    SessionState,
+    SuggestedAction,
     TokenEvent,
     Usage,
 )
@@ -109,12 +113,20 @@ class Orchestrator:
         triage: Triage | None = None,
         advisor: Advisor | None = None,
         settings: Settings | None = None,
+        sessions: SessionStore | None = None,
+        registrar: Registrar | None = None,
     ) -> None:
         self._gateway = gateway
         self._kb = knowledge_base
         self._direct = direct
         self._quota = quota
         self._settings = settings if settings is not None else get_settings()
+        self._sessions = sessions
+        self._registrar = registrar
+        # Кнопки, относящиеся к текущему ответу. Живут на экземпляре, а не
+        # в возвращаемом значении, чтобы не менять подпись `_route`, общую
+        # для потока и ответа целиком.
+        self._pending_actions: tuple[SuggestedAction, ...] = ()
         self._triage = triage if triage is not None else Triage()
         self._advisor = (
             advisor
@@ -172,6 +184,70 @@ class Orchestrator:
             update={"topic": result.topic, "inquiry_type": result.inquiry_type}
         )
         return request.model_copy(update={"metadata": metadata})
+
+    # --- регистрация обращения (Этап 2) -------------------------------------- #
+
+    def _session(self, request: GenerateRequest) -> SessionState | None:
+        """Состояние диалога, если оно вообще ведётся.
+
+        `None` — состояние не хранится: Redis недоступен либо хранилище не
+        подключено. Это не ошибка ответа: без состояния работает всё, кроме
+        регистрации, а она без состояния и не должна работать (правило 4.7).
+        """
+        if self._sessions is None:
+            return None
+        try:
+            return self._sessions.load(
+                request.metadata.session_id, request.metadata.subscriber_id
+            )
+        except SubscriberMismatch as exc:
+            # Чужую сессию не отдаём и новую под тем же ключом не заводим:
+            # иначе подмена `session_id` молча создавала бы рабочий диалог.
+            logger.warning("сессия запрошена не тем абонентом: %s", exc)
+            return None
+
+    def _registration_answer(
+        self, request: GenerateRequest
+    ) -> tuple[DirectAnswer, tuple[SuggestedAction, ...]] | None:
+        """Ответ на нажатие кнопки под черновиком.
+
+        Стоит **до** классификации и поиска: намерение задано признаком, искать
+        по слову «Подтверждаю» нечего, а звать модель — тем более.
+        """
+        if request.metadata.intent is None or self._registrar is None:
+            return None
+
+        session = self._session(request)
+        if session is None:
+            return (
+                DirectAnswer(
+                    text=(
+                        "Черновик обращения не найден — возможно, прошло слишком "
+                        "много времени. Опишите, пожалуйста, вопрос заново."
+                    )
+                ),
+                (),
+            )
+
+        outcome = self._registrar.apply(request, session)
+        self._sessions.save(session)  # type: ignore[union-attr]
+        return DirectAnswer(text=outcome.text), outcome.actions
+
+    def _offer_registration(
+        self, request: GenerateRequest
+    ) -> tuple[str, tuple[SuggestedAction, ...]]:
+        """Приписка с черновиком к обычному ответу, если тип это допускает."""
+        if self._registrar is None or self._sessions is None:
+            return "", ()
+        session = self._session(request)
+        if session is None:
+            return "", ()
+
+        outcome = self._registrar.offer(request, session)
+        if outcome is None:
+            return "", ()
+        self._sessions.save(session)
+        return outcome.text, outcome.actions
 
     def _direct_answer(self, request: GenerateRequest) -> DirectAnswer | None:
         now = datetime.now()
@@ -280,10 +356,17 @@ class Orchestrator:
         а не размазан по двум точкам входа: поток и ответ целиком обязаны
         принимать одинаковые решения.
         """
-        request = self._triaged(request)
+        # Нажатие кнопки под черновиком разбирается до классификации и поиска:
+        # намерение задано признаком, искать по слову «Подтверждаю» нечего.
+        if (decided := self._registration_answer(request)) is not None:
+            self._pending_actions = decided[1]
+            return request, decided[0]
 
-        if (answer := self._direct_answer(request)) is not None:
-            return request, answer
+        request = self._triaged(request)
+        self._pending_actions = ()
+
+        if (direct := self._direct_answer(request)) is not None:
+            return request, direct
 
         request = self._with_context(request)
         return request, self._advice(request)
@@ -292,7 +375,17 @@ class Orchestrator:
         """Ответ целиком. Для служебных вызовов, не для пути абонента."""
         request, answer = self._route(request)
         if answer is None:
-            return await self._gateway.generate(request)
+            response = await self._gateway.generate(request)
+            if isinstance(response, GenerateResponse):
+                offer, actions = self._offer_registration(request)
+                if offer:
+                    response = response.model_copy(
+                        update={
+                            "answer": response.answer + offer,
+                            "suggested_actions": list(actions),
+                        }
+                    )
+            return response
 
         trace_id = self._gateway.new_trace_id()
         if (problem := self._quota_problem(request, trace_id)) is not None:
@@ -302,6 +395,7 @@ class Orchestrator:
             model="direct",
             confidence_score=1.0,
             disclaimer=answer.disclaimer,
+            suggested_actions=list(self._pending_actions),
             trace_id=trace_id,
             routing={"path": "direct"},
         )
@@ -325,7 +419,11 @@ class Orchestrator:
             metrics.record_response(channel=channel, inquiry_type=inquiry_type, outcome="success")
 
             yield TokenEvent(delta=answer.text)
-            yield MetadataEvent(confidence_score=1.0, disclaimer=answer.disclaimer)
+            yield MetadataEvent(
+                confidence_score=1.0,
+                disclaimer=answer.disclaimer,
+                suggested_actions=list(self._pending_actions),
+            )
             yield DoneEvent(
                 finish_reason=FinishReason.STOP,
                 usage=Usage(),
@@ -334,5 +432,12 @@ class Orchestrator:
             )
             return
 
+        offer, actions = self._offer_registration(request)
         async for event in self._gateway.stream(request):
+            if offer and isinstance(event, MetadataEvent):
+                # Приписка идёт последним куском текста, а не отдельным полем:
+                # абонент читает ответ подряд, и черновик — его продолжение.
+                yield TokenEvent(delta=offer)
+                yield event.model_copy(update={"suggested_actions": list(actions)})
+                continue
             yield event

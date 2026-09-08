@@ -229,12 +229,12 @@ def test_клиент_хранилища_собран_с_таймаутом_и_�
     from app.config import get_settings
     from app.main import _build_quota
 
-    quota = _build_quota()
+    # `_build_quota` отдаёт и менеджер, и сам клиент: клиент общий с хранилищем
+    # сессий, потому что Redis — одна служба, и второе подключение к ней
+    # означало бы второй таймаут там, где отказ один.
+    quota, client = _build_quota()
     assert quota is not None, "клиент Redis не установлен — проверка бессмысленна"
-
-    client = next(
-        value for value in vars(quota).values() if hasattr(value, "connection_pool")
-    )
+    assert client is not None
     kwargs = client.connection_pool.connection_kwargs
     timeout = get_settings().redis_timeout_seconds
 

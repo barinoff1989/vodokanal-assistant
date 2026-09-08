@@ -17,7 +17,11 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
+from app.adapters.inquiry_service import InquiryServiceAdapter
 from app.backend.orchestrator import Orchestrator
+from app.backend.registration import Registrar
+from app.backend.sessions import SessionStore
+from app.billing.source import BillingSource
 from app.config import get_settings
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
@@ -31,7 +35,7 @@ from app.tariffs.store import TariffStore
 logger = logging.getLogger(__name__)
 
 
-def _build_quota() -> QuotaManager | None:
+def _build_quota() -> tuple[QuotaManager | None, object | None]:
     """Собрать учёт лимитов, если клиент хранилища установлен.
 
     Подключение к Redis создаётся лениво и не проверяется здесь: по ADR-008
@@ -69,11 +73,10 @@ def _build_quota() -> QuotaManager | None:
             service_limit=settings.quota_service_per_minute,
             store_retry_after=settings.quota_retry_after_seconds,
         )
+        return quota, client
     except ImportError:  # pragma: no cover — клиент есть в зависимостях шага 4
         logger.warning("клиент Redis не установлен: лимиты не проверяются")
-        quota = None
-
-    return quota
+        return None, None
 
 
 def _build_outages() -> OutageResponder | None:
@@ -148,6 +151,50 @@ def _build_tariffs() -> TariffResponder | None:
     return TariffResponder(TariffStore.from_file(path))
 
 
+def _build_billing_source() -> BillingSource | None:
+    """Пример данных Биллинга — из него берутся ФИО и лицевой счёт для слотов."""
+    settings = get_settings()
+    path = Path(settings.billing_data_path)
+    if not path.exists():
+        logger.warning("пример данных Биллинга не найден (%s): слоты не соберутся", path)
+        return None
+    from app.billing.source import CsvBillingSource
+
+    return CsvBillingSource(path)
+
+
+def _build_registrar(quota_client: object | None) -> tuple[SessionStore, Registrar | None]:
+    """Собрать состояние диалога и регистрацию обращений (шаги 7 и 9).
+
+    Хранилище сессий и Redis лимитов — **один и тот же экземпляр**: это одна
+    служба, и второе подключение к ней означало бы второй таймаут и второй отказ
+    там, где отказ один.
+
+    Регистрация выключается сама, если нет Postgres: обращение некуда записать,
+    и предлагать его абоненту значило бы обещать несделанное. Ответы на вопросы
+    при этом работают — пути независимы.
+    """
+    settings = get_settings()
+    sessions = SessionStore(quota_client, ttl_seconds=settings.session_ttl_seconds)
+
+    try:
+        import psycopg
+
+        from app.inquiries.store import InquiryStore
+
+        store = InquiryStore(lambda: psycopg.connect(settings.inquiries_dsn))
+        store.ensure_schema()
+    except Exception as exc:  # noqa: BLE001 — драйвера может не быть, базы тоже
+        logger.warning("регистрация обращений выключена: %s", exc)
+        return sessions, None
+
+    return sessions, Registrar(
+        sessions,
+        adapter=InquiryServiceAdapter(client=store),
+        billing=_build_billing_source(),
+    )
+
+
 def create() -> object:
     """Собрать приложение. Вынесено функцией ради проверок."""
     from app.api import create_app
@@ -164,7 +211,8 @@ def create() -> object:
 
     started = time.perf_counter()
     settings = get_settings()
-    quota = _build_quota()
+    quota, redis_client = _build_quota()
+    sessions, registrar = _build_registrar(redis_client)
 
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
     # реестр дешевле поиска по графику, а тем у него меньше.
@@ -187,6 +235,8 @@ def create() -> object:
         direct=responders,
         quota=quota,
         settings=settings,
+        sessions=sessions,
+        registrar=registrar,
     )
     logger.info("подъём завершён за %.1f с", time.perf_counter() - started)
     return create_app(orchestrator)

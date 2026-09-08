@@ -314,6 +314,19 @@ class Settings(BaseSettings):
     inquiries_db: str = "inquiries_stub"
 
     @property
+    def inquiries_dsn(self) -> str:
+        """Строка подключения к базе обращений.
+
+        Собирается из частей, а не задаётся отдельной настройкой: иначе хост и
+        пароль жили бы в двух местах и разошлись бы при первой правке — этот
+        класс ошибки проект проходил трижды (журнал, разделы 41.1, 43.2, 49.2).
+        """
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.inquiries_db}"
+        )
+
+    @property
     def is_production(self) -> bool:
         return self.app_env == "production"
 

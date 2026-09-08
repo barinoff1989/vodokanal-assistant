@@ -35,9 +35,23 @@ __all__ = ["DispatchAdapter", "EmergencyRequest", "Inquiry", "InquiryServiceAdap
 
 
 class _ApiLike(Protocol):
-    """Минимум, который нужен от клиента чужого API."""
+    """Минимум, который нужен от клиента чужого API.
 
-    def __getattr__(self, name: str) -> Any: ...
+    Раньше здесь стоял `__getattr__`: под него подходило что угодно, и проверка
+    типов ничего не проверяла. Теперь названы сами методы — на прототипе их
+    предоставляет таблица в Postgres (`app/inquiries/store.py`), на MVP
+    предоставит обёртка над REST владельца.
+    """
+
+    def create_inquiry(self, payload: dict[str, Any], key: str) -> str: ...
+
+
+class _DispatchLike(Protocol):
+    """То же для Диспетчерской: чтение аварий и передача заявки."""
+
+    def get_incidents(self, address: str) -> list[dict[str, Any]]: ...
+
+    def create_incident(self, payload: dict[str, Any], key: str) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +107,11 @@ class InquiryServiceAdapter(WriteAdapter):
                 "subject": inquiry.subject,
                 "body": inquiry.body,
                 "subscriber_id": subscriber_id,
+                # Сессия идёт в запись, а не остаётся в аудите: по жалобе
+                # абонента нужно поднять диалог, из которого выросло обращение.
+                # Без неё запись сирота — известно, кто подал, но не известно,
+                # что именно ему показывали перед подтверждением.
+                "session_id": session.session_id,
                 "slots": inquiry.slots,
             },
         )
@@ -119,7 +138,7 @@ class DispatchAdapter(WriteAdapter):
 
     system = "dispatch"
 
-    def __init__(self, client: _ApiLike | None = None) -> None:
+    def __init__(self, client: _DispatchLike | None = None) -> None:
         super().__init__()
         self._client = client
 

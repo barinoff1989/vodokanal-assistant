@@ -337,3 +337,33 @@ def test_основа_не_выполняет_запись_сама():
     adapter = WriteAdapter()
     with pytest.raises(NotImplementedError):
         adapter.perform(_session(), "sub-1", key_parts=("x",), payload={})
+
+
+def test_сессия_попадает_в_запись_обращения():
+    """По жалобе абонента нужно поднять диалог, из которого выросло обращение.
+
+    Без сессии запись сирота: известно, кто подал, но не известно, что именно
+    ему показывали перед подтверждением — а показанное и подтверждённое обязаны
+    совпадать (правило 4.7)."""
+    seen: dict[str, Any] = {}
+
+    class Client:
+        def create_inquiry(self, payload: dict[str, Any], key: str) -> str:
+            seen.update(payload)
+            return "42"
+
+    session = SessionState(session_id="sess-77", subscriber_id="sub-1")
+    session.current_state = InquiryState.AWAITING_CONFIRMATION
+    adapter = InquiryServiceAdapter(client=Client())
+
+    adapter.register(
+        session,
+        "sub-1",
+        Inquiry(
+            inquiry_type=InquiryType.METER_VERIFICATION,
+            subject="Заказать поверку",
+            body="черновик",
+        ),
+    )
+
+    assert seen["session_id"] == "sess-77"
