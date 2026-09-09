@@ -60,12 +60,14 @@
       </tr>
       <tr>
         <td class="name">Guardrails</td>
-        <td class="tag">custom validators + LLM-judge</td>
+        <td class="tag">regex + spaCy/Presidio; LLM-judge (целевое)</td>
         <td>Выход, sync + async</td>
-        <td>Проверяет ответ модели перед тем, как он попадёт к абоненту. Быстрая sync-проверка (PII в
-          выводе, токсичность, policy) обрывает поток и возвращает safe fallback при нарушении — без
-          задержки основного пути. Более дорогая оценка groundedness/faithfulness выполняется асинхронно
-          после завершения стрима и не блокирует ответ абоненту.</td>
+        <td>Проверяет ответ модели перед тем, как он попадёт к абоненту. Sync-проверка обрывает поток
+          и возвращает safe fallback: <b>ПДн в выводе</b> — тем же обезличивателем (spaCy NER через
+          Presidio), <b>токсичность / policy / разглашение промпта</b> — regex (LLM не в бюджет 50&nbsp;мс,
+          тонкие случаи → судья). Async groundedness/faithfulness — <b>сейчас заглушка</b> (доля слов
+          ответа в контексте, <code>provisional</code>); настоящий судья по ADR-007 подключается на
+          код-шаге 10 и в живом пути пока не вызывается.</td>
       </tr>
       <tr>
         <td class="name">Quota Manager</td>
@@ -75,21 +77,26 @@
           Redis. При превышении — 429 + <code>Retry-After</code> (RFC 7807).</td>
       </tr>
       <tr>
-        <td class="name">Billing Callback</td>
-        <td class="tag">clickhouse-connect</td>
-        <td>Выход, async</td>
-        <td>Пишет токены, стоимость и latency каждого вызова в ClickHouse (аналитика использования) —
-          не в критическом пути ответа.</td>
-      </tr>
-      <tr>
         <td class="name">LiteLLM Core</td>
-        <td class="tag">Off-the-shelf: Python Proxy</td>
+        <td class="tag">готовое ядро; маршрутизатор в процессе</td>
         <td>Центр</td>
-        <td>Готовое ядро: OpenAI-совместимый API, маршрутизация моделей и fallback, retry / circuit
-          breaker / timeout, адаптеры провайдеров, SSE-стриминг токенов.</td>
+        <td>OpenAI-совместимый вызов, маршрутизация моделей по <code>litellm_config.yaml</code> и fallback,
+          retry / circuit breaker / timeout, адаптеры провайдеров, SSE-стриминг. Отдельного
+          прокси-процесса нет: <code>litellm.Router</code> живёт внутри процесса шлюза (раздел 5.5,
+          ИСПРАВЛЕНО v4.17).</td>
       </tr>
     </tbody>
   </table>
+
+  <p style="margin-top:1.2rem">
+    <b>Billing Callback — свёрнут (v4.50).</b> Это не компонент, а две записи метрик из
+    <code>LlmGateway</code>: <code>llm_gateway_tokens_total</code>, <code>llm_provider_used_total</code>
+    и гистограммы времён — в <b>Prometheus</b> (порт 9100, дашборд раздел 37); плюс одна строка на
+    вызов в таблице <code>usage_events</code> — на прототипе <b>Postgres</b>, на MVP ClickHouse
+    (раздел 35.1, 31). Стоимость в деньгах не считается: у проекта нет тарифов провайдера (P0&nbsp;№1).
+    Роль «аналитика по абонентам / типам / моделям» закрывает <code>usage_events</code>, чего счётчики
+    Prometheus без взрыва кардинальности не дают.
+  </p>
 </div>
 </body>
 </html>
