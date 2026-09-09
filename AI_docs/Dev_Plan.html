@@ -158,12 +158,17 @@
 │   │   ├── splitter.py            чанкинг с overlap                         шаг 5
 │   │   └── indexer.py             upsert, tombstones, alias                 шаг 5
 │   │
-│   └── metrics/
-│       └── prometheus.py          метрики по конвенции дашборда             шаг 10
+│   ├── metrics/
+│   │   └── prometheus.py          метрики по конвенции дашборда             шаг 10
+│   │
+│   └── quality/
+│       ├── judge.py               судья качества (LLM-judge, ADR-007)       шаг 10
+│       └── store.py               отчёт прогона в quality_reports           шаг 10
 │
 ├── scripts/
 │   ├── generate_synthetic.py      генератор стартовых данных                шаг 0
-│   └── build_golden_set.py        сборка эталонного набора                  шаг 10
+│   ├── build_golden_set.py        сборка эталонного набора                  шаг 10
+│   └── run_quality_eval.py        ночной прогон судьи по набору             шаг 10
 │
 ├── web/
 │   ├── index.html                 демо-стенд вместо личного кабинета        шаг 8.5
@@ -814,8 +819,8 @@
 
     <div class="step">
       <div class="shead"><span class="snum">ШАГ 10</span><span class="sstatus partial">ЧАСТИЧНО</span><span class="stitle">Наблюдаемость и эталонный набор</span><span class="stime">2–4 ч</span></div>
-      <div class="sfiles">app/metrics/prometheus.py · scripts/build_golden_set.py · golden_set/**</div>
-      <div class="note warn"><b>Наблюдаемость и эталонный набор сделаны; остаётся судья качества.</b> Четырнадцать метрик эмитятся по конвенции имён дашборда, связь проверяется в обе стороны. Эталонный набор — 66 вопросов, из них 63 настоящих, разметка ручная (<code>bname</code> выгрузки для неё не годится). Recall@3 = 87%. Тот же замер показал, что порог 0,80 вопросы с ответом и без не разделяет (журнал раздел 65).</div>
+      <div class="sfiles">app/metrics/prometheus.py · app/quality/** · scripts/build_golden_set.py · scripts/run_quality_eval.py · golden_set/**</div>
+      <div class="note warn"><b>Наблюдаемость, эталонный набор и судья сделаны; остаётся снять базовую линию.</b> Четырнадцать метрик эмитятся по конвенции имён дашборда, связь проверяется в обе стороны. Эталонный набор — 66 вопросов, из них 63 настоящих, разметка ручная (<code>bname</code> выгрузки для неё не годится). Recall@3 = 87%. Судья качества написан (<code>app/quality/judge.py</code>, ADR-007 роль 4a) и проверен на подменённой модели; ночной прогон — <code>scripts/run_quality_eval.py</code>, итог в таблицу <code>quality_reports</code>. <b>Базовая линия качества не снята:</b> для неё нужен живой прогон с поднятой Ollama (судья) и провайдером генерации, а на машине разработки их нет (журнал раздел 84).</div>
       <div class="sgoal">Замкнуть цикл на уже спроектированные дашборд и план тестирования качества: метрики начинают эмитироваться, эталонный набор появляется физически.</div>
 
       <h4>Новое ПО</h4>

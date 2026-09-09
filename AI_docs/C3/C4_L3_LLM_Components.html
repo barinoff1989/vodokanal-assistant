@@ -65,9 +65,11 @@
         <td>Проверяет ответ модели перед тем, как он попадёт к абоненту. Sync-проверка обрывает поток
           и возвращает safe fallback: <b>ПДн в выводе</b> — тем же обезличивателем (spaCy NER через
           Presidio), <b>токсичность / policy / разглашение промпта</b> — regex (LLM не в бюджет 50&nbsp;мс,
-          тонкие случаи → судья). Async groundedness/faithfulness — <b>сейчас заглушка</b> (доля слов
-          ответа в контексте, <code>provisional</code>); настоящий судья по ADR-007 подключается на
-          код-шаге 10 и в живом пути пока не вызывается.</td>
+          тонкие случаи → судья). Async groundedness на выходе шлюза — <b>дешёвая эвристика</b>
+          (доля слов ответа в контексте, <code>provisional</code>). Настоящую оценку
+          (faithfulness, answer&nbsp;relevancy) делает <b>судья</b> (<code>app/quality/judge.py</code>,
+          ADR-007) — отдельная модель, ночным прогоном <code>scripts/run_quality_eval.py</code> по
+          эталонному набору, вне пути абонента.</td>
       </tr>
       <tr>
         <td class="name">Quota Manager</td>

@@ -4,7 +4,7 @@
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm install-data install-pii install-search measure-search golden-set subscriber-directory measure-retrieval measure-reranking model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii install-search measure-search golden-set subscriber-directory measure-retrieval measure-reranking quality-eval model-pull preflight test test-live lint typecheck check
 
 help:
 	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
@@ -20,6 +20,7 @@ help:
 	@echo "subscriber-directory — пересобрать справочник абонентов стенда из data_example/"
 	@echo "measure-retrieval — качество поиска и цена порога (секунды)"
 	@echo "measure-reranking — кросс-энкодер против косинуса (минут двадцать)"
+	@echo "quality-eval — ночной прогон судьи качества по эталонному набору (живой)"
 	@echo "test        — тесты без внешних зависимостей"
 	@echo "test-live   — тесты на реальной модели (нужна запущенная Ollama)"
 	@echo "lint        — ruff"
@@ -81,6 +82,12 @@ measure-retrieval: golden-set
 # ничего не стоит.
 measure-reranking: golden-set
 	$(PYTHON) scripts/measure_reranking.py --json golden_set/reranking.json
+
+# Ночной прогон судьи качества по эталонному набору (код-шаг 10). Живой: нужны
+# Ollama (судья local-test) и провайдер генерации с ключами. Пишет итог прогона
+# в таблицу quality_reports базы telemetry.
+quality-eval: golden-set
+	$(PYTHON) scripts/run_quality_eval.py --json golden_set/quality.json
 
 install-pii:
 	$(PYTHON) $(PIP_SLOW) ".[pii]"
