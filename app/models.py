@@ -59,6 +59,7 @@ __all__ = [
     "Slots",
     "SourceRef",
     "SuggestedAction",
+    "TemplateFill",
     "TokenEvent",
     "TriageResult",
     "Usage",
@@ -516,6 +517,25 @@ class AuditEntry(BaseModel):
     названия полей, по тому же правилу, что и в `PiiReport`."""
 
 
+class TemplateFill(BaseModel):
+    """Заполнение бланка заявления по репликам (раздел 79.2).
+
+    Отдельно от `Slots`: слоты — это данные обращения, которое ассистент
+    регистрирует сам; здесь — поля бумажного бланка, который абонент подаёт сам.
+    Ответы — свободный текст абонента, поэтому `repr=False`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: str
+    pending: str | None = None
+    """Имя поля, которое сейчас спрашивают. `None` — все поля собраны."""
+
+    answers: dict[str, str] = Field(default_factory=dict, repr=False)
+    """Имя поля → ответ абонента. Пустая строка — поле пропущено, останется
+    прочерком в бланке."""
+
+
 class SessionState(BaseModel):
     """Состояние диалога с абонентом (раздел 10, `SessionState`)."""
 
@@ -529,6 +549,9 @@ class SessionState(BaseModel):
     slots: Slots = Field(default_factory=Slots)
     draft_text: str | None = Field(default=None, repr=False)
     submission_result: dict[str, Any] | None = None
+    template_fill: TemplateFill | None = None
+    """Идёт ли сбор полей бланка заявления. `None` — не идёт."""
+
     audit_log: list[AuditEntry] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

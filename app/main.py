@@ -21,8 +21,10 @@ from app.adapters.inquiry_service import InquiryServiceAdapter
 from app.backend.orchestrator import Orchestrator
 from app.backend.registration import Registrar
 from app.backend.sessions import SessionStore
+from app.billing.answer import AccountResponder
 from app.billing.source import BillingSource
 from app.config import get_settings
+from app.documents.responder import TemplateResponder
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
 from app.kb.build import build_knowledge_base
@@ -152,18 +154,28 @@ def _build_tariffs() -> TariffResponder | None:
 
 
 def _build_billing_source() -> BillingSource | None:
-    """Пример данных Биллинга — из него берутся ФИО и лицевой счёт для слотов."""
+    """Пример данных Биллинга.
+
+    Из него берутся ФИО и лицевой счёт для слотов регистрации, а также факты для
+    ответов о лицевом счёте (`AccountResponder`): задолженность, начисления,
+    сроки поверки, показания. Один экземпляр на оба пути — файлы читаются при
+    старте один раз.
+    """
     settings = get_settings()
     path = Path(settings.billing_data_path)
     if not path.exists():
-        logger.warning("пример данных Биллинга не найден (%s): слоты не соберутся", path)
+        logger.warning(
+            "пример данных Биллинга не найден (%s): слоты и ответы о счёте выключены", path
+        )
         return None
     from app.billing.source import CsvBillingSource
 
     return CsvBillingSource(path)
 
 
-def _build_registrar(quota_client: object | None) -> tuple[SessionStore, Registrar | None]:
+def _build_registrar(
+    quota_client: object | None, billing: BillingSource | None
+) -> tuple[SessionStore, Registrar | None]:
     """Собрать состояние диалога и регистрацию обращений (шаги 7 и 9).
 
     Хранилище сессий и Redis лимитов — **один и тот же экземпляр**: это одна
@@ -191,7 +203,7 @@ def _build_registrar(quota_client: object | None) -> tuple[SessionStore, Registr
     return sessions, Registrar(
         sessions,
         adapter=InquiryServiceAdapter(client=store),
-        billing=_build_billing_source(),
+        billing=billing,
     )
 
 
@@ -212,14 +224,25 @@ def create() -> object:
     started = time.perf_counter()
     settings = get_settings()
     quota, redis_client = _build_quota()
-    sessions, registrar = _build_registrar(redis_client)
+    billing = _build_billing_source()
+    sessions, registrar = _build_registrar(redis_client, billing)
 
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
     # реестр дешевле поиска по графику, а тем у него меньше.
-    with _stage("прямые ответчики: реестр, тарифы, график отключений"):
+    with _stage("прямые ответчики: реестр, тарифы, отключения, лицевой счёт, бланки"):
+        account = AccountResponder(billing) if billing is not None else None
+        templates = TemplateResponder(
+            billing=billing, settings=settings, sessions=sessions
+        )
         responders = tuple(
             r
-            for r in (_build_regulated(), _build_tariffs(), _build_outages())
+            for r in (
+                _build_regulated(),
+                _build_tariffs(),
+                _build_outages(),
+                account,
+                templates,
+            )
             if r is not None
         )
 

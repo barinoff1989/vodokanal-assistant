@@ -668,6 +668,8 @@ components:
       - outage
       - water_quality
       - tariff
+      - account
+      - template
       title: Topic
       type: string
     Usage:
