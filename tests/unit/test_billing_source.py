@@ -46,6 +46,15 @@ def test_счета_читаются(billing: CsvBillingSource):
     assert len(billing) == 200
 
 
+def test_перечень_всех_счетов_доступен_стенду(billing: CsvBillingSource):
+    """`accounts()` не в протоколе `BillingSource` — настоящий API его не отдаст.
+    Он только для справочника демо-стенда, и вернуть должен ровно то же, что
+    видно через `account()`."""
+    everyone = billing.accounts()
+    assert len(everyone) == len(billing)
+    assert billing.account(everyone[0].number) == everyone[0]
+
+
 def test_счёт_находится_по_номеру(billing: CsvBillingSource):
     account = billing.account("2100202213")
 

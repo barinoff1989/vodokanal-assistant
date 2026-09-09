@@ -12,37 +12,41 @@
 
 "use strict";
 
-// Абоненты взяты из присланного примера Биллинга (`data_example/ЛСФЛ.csv`),
-// а не выдуманы: адреса, балансы и данные счётчиков настоящие для этого набора.
+// Справочник абонентов собирается из присланного примера Биллинга
+// (`data_example/ЛСФЛ.csv` и др.) скриптом `scripts/build_subscriber_directory.py`
+// в `web/subscribers.json`. Стенд читает его как статический файл — новый адрес
+// в контракт API (правило 4.4) не добавляется.
 //
-// ПАРА ПОДОБРАНА КОНТРАСТНОЙ, И ЭТО НЕ ОФОРМЛЕНИЕ. У первой отключение в
-// графике есть, у второй его нет — без второй демонстрация показывала бы работу
-// поиска, но не его способность ответить «отключений нет», а это разные вещи
-// (то же соображение, что в `scripts/normalize_addresses.py`).
+// На рабочей системе этого справочника нет: `Session Context Provider` (C3
+// виджета) берёт `subscriber_id` из SSO-сессии ЛК, искать некого. Поиск нужен
+// только стенду — войти любым из примерных абонентов и показать разные сценарии
+// (долг и переплата, отключение и его отсутствие), в том числе вручную
+// воспроизвести проверки S1–S2: подтвердить черновик от чужого имени.
 //
-// Прежняя редакция держала здесь выдуманных абонентов с адресами «ул. Речная» и
-// «пр. Заводской». Их нет в графике отключений: путь `outage` на стенде не
-// показывался вовсе, сколько бы вопросов о воде ни задали.
-const SUBSCRIBERS = [
+// Пара на случай, если файл не собран: без него стенд всё равно должен
+// показывать оба ответа про отключения — «есть» и «нет».
+const FALLBACK_SUBSCRIBERS = [
   {
-    id: "2100707718",
-    name: "Михайлова Татьяна Алексеевна",
-    account: "2100707718",
-    // Есть в графике: Левобережный, 03.08 — 06.08.
-    address: "г. Воронеж, ул. Саврасова, д. 2, кв. 9",
-    balance: "−331,78 ₽",
-    meter: "ХВС № 17078956, поверка до 01.06.2028",
+    account: "2100202213",
+    name: "Петров Николай Егорович",
+    address: "г. Воронеж, Зои Космодемьянской, д. 50, кв. 78",
+    balance: "−1 250,00 ₽",
+    debt: "1 250,00 ₽",
+    meters: "справочник не собран — запустите scripts/build_subscriber_directory.py",
   },
   {
-    id: "2100303314",
-    name: "Кузнецова Ольга Дмитриевна",
     account: "2100303314",
-    // В графике отсутствует — проверяет ответ «плановых отключений нет».
+    name: "Кузнецова Ольга Дмитриевна",
     address: "г. Воронеж, ул. Курчатова, д. 50, кв. 12",
-    balance: "4 553,89 ₽ (переплата)",
-    meter: "ХВС № 21034512, поверка до 05.09.2030",
+    balance: "4 553,89 ₽",
+    meters: "справочник не собран — запустите scripts/build_subscriber_directory.py",
   },
 ];
+
+const DIRECTORY_LIMIT = 40; // сколько строк показывать разом — остальное сужается поиском
+
+let directory = [];
+let selected = null;
 
 const SESSION_ID = "sess-" + Math.random().toString(36).slice(2, 10);
 const SYSTEM_PROMPT =
@@ -51,7 +55,9 @@ const SYSTEM_PROMPT =
 
 const el = (id) => document.getElementById(id);
 const ui = {
-  subscriber: el("subscriber"),
+  search: el("dir-search"),
+  directory: el("directory"),
+  dirMeta: el("dir-meta"),
   profile: el("profile"),
   feed: el("feed"),
   form: el("composer"),
@@ -75,24 +81,104 @@ const ui = {
 
 let tokensUsed = 0;
 
-/* --- профиль абонента ----------------------------------------------------- */
+/* --- справочник абонентов (роль Session Context Provider на стенде) -------- */
 
 function currentSubscriber() {
-  return SUBSCRIBERS.find((s) => s.id === ui.subscriber.value) || SUBSCRIBERS[0];
+  return selected || directory[0] || FALLBACK_SUBSCRIBERS[0];
+}
+
+// Поиск по фамилии или по номеру счёта. Строка из букв ищется в ФИО, строка из
+// цифр — в номере: спрашивать «по чему искать» лишнее, а разнести можно по виду
+// введённого.
+function matches(entry, term) {
+  if (!term) return true;
+  const digits = term.replace(/\D/g, "");
+  if (digits && /^\d/.test(term.trim())) return entry.account.includes(digits);
+  return entry.name.toLowerCase().includes(term.toLowerCase());
+}
+
+function renderDirectory() {
+  const term = ui.search.value.trim();
+  const found = directory.filter((entry) => matches(entry, term));
+  const shown = found.slice(0, DIRECTORY_LIMIT);
+
+  ui.directory.innerHTML = shown
+    .map((entry) => {
+      const marks = [];
+      if (entry.debt) marks.push('<span class="mark debt">долг</span>');
+      if (entry.outage) marks.push('<span class="mark outage">отключение</span>');
+      const current = selected && selected.account === entry.account ? " current" : "";
+      return (
+        `<li role="option" data-account="${escape(entry.account)}"` +
+        ` class="dir-row${current}" tabindex="0">` +
+        `<span class="dir-name">${escape(entry.name)}</span>` +
+        `<span class="dir-acc">${escape(entry.account)}</span>` +
+        (marks.length ? `<span class="dir-marks">${marks.join("")}</span>` : "") +
+        "</li>"
+      );
+    })
+    .join("");
+
+  if (!directory.length) {
+    ui.dirMeta.textContent = "справочник не собран: scripts/build_subscriber_directory.py";
+  } else if (!found.length) {
+    ui.dirMeta.textContent = "никто не найден";
+  } else if (found.length > shown.length) {
+    ui.dirMeta.textContent = `показаны первые ${shown.length} из ${found.length} — уточните поиск`;
+  } else {
+    ui.dirMeta.textContent = `найдено: ${found.length}`;
+  }
+}
+
+function selectSubscriber(account, { announce } = { announce: true }) {
+  const entry = directory.find((s) => s.account === account) ||
+    FALLBACK_SUBSCRIBERS.find((s) => s.account === account);
+  if (!entry) return;
+  const changed = !selected || selected.account !== entry.account;
+  selected = entry;
+  renderDirectory();
+  renderProfile();
+  if (announce && changed) {
+    addMessage(
+      "assistant",
+      "Вошли как " + entry.name + ". Сессия та же, идентификатор абонента " +
+        "изменился — на этом и проверяется привязка сессии к абоненту.",
+    );
+  }
 }
 
 function renderProfile() {
   const s = currentSubscriber();
   const rows = [
+    ["Абонент", s.name],
     ["Лицевой счёт", s.account],
     ["Адрес", s.address],
     ["Баланс", s.balance],
-    ["Счётчик", s.meter],
-    ["Сессия", SESSION_ID],
   ];
+  if (s.debt) rows.push(["Задолженность", s.debt]);
+  rows.push(["Счётчик", s.meters]);
+  if (s.outage) rows.push(["Плановое отключение", s.outage]);
+  if (s.phone) rows.push(["Телефон ЛК", s.phone]);
+  rows.push(["Сессия", SESSION_ID]);
   ui.profile.innerHTML = rows
     .map(([term, value]) => `<dt>${escape(term)}</dt><dd>${escape(value)}</dd>`)
     .join("");
+}
+
+async function loadDirectory() {
+  try {
+    const response = await fetch("/static/subscribers.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const payload = await response.json();
+    directory = Array.isArray(payload.subscribers) ? payload.subscribers : [];
+  } catch (error) {
+    // Не пустой список: без справочника стенд всё равно должен что-то показывать.
+    directory = FALLBACK_SUBSCRIBERS.slice();
+    logEvent("error", "справочник абонентов не загружен: " + error.message);
+  }
+  selected = directory[0] || null;
+  renderDirectory();
+  renderProfile();
 }
 
 /* --- лента ---------------------------------------------------------------- */
@@ -259,7 +345,10 @@ async function ask(question, intent) {
           // Намерение уходит признаком, а не словом в тексте: сервер по нему и
           // только по нему решает, выполнять ли запись (правило 4.7).
           ...(intent ? { intent: intent } : {}),
-          subscriber_id: subscriber.id,
+          // Номер лицевого счёта и есть идентификатор абонента: по нему
+          // регистрация обращения ищет профиль в Биллинге
+          // (`app/backend/registration.py`).
+          subscriber_id: subscriber.account,
           session_id: SESSION_ID,
           channel: "lk_web",
           // Адрес идёт из профиля кабинета, а не из текста вопроса: ЛК его
@@ -415,13 +504,18 @@ ui.query.addEventListener("keydown", (event) => {
   }
 });
 
-ui.subscriber.innerHTML = SUBSCRIBERS.map(
-  (s) => `<option value="${s.id}">${escape(s.name)}</option>`
-).join("");
-ui.subscriber.addEventListener("change", () => {
-  renderProfile();
-  addMessage("assistant", "Вошли как другой абонент. Сессия та же, идентификатор абонента " +
-    "изменился — на этом и проверяется привязка сессии к абоненту.");
-});
+ui.search.addEventListener("input", renderDirectory);
 
-renderProfile();
+// Выбор строки — мышью или клавишей. Список длинный, и тянуться к мыши на каждый
+// сценарий демонстрации мешало бы.
+function pick(event) {
+  const row = event.target.closest(".dir-row");
+  if (!row) return;
+  if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  selectSubscriber(row.dataset.account);
+}
+ui.directory.addEventListener("click", pick);
+ui.directory.addEventListener("keydown", pick);
+
+loadDirectory();

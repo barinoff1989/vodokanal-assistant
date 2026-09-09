@@ -4,7 +4,7 @@
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
 
-.PHONY: help install-min install install-llm install-data install-pii install-search measure-search golden-set measure-retrieval measure-reranking model-pull preflight test test-live lint typecheck check
+.PHONY: help install-min install install-llm install-data install-pii install-search measure-search golden-set subscriber-directory measure-retrieval measure-reranking model-pull preflight test test-live lint typecheck check
 
 help:
 	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
@@ -17,6 +17,7 @@ help:
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
 	@echo "measure-search — замер моделей поиска на этой машине (шаг 5)"
 	@echo "golden-set  — собрать эталонный набор поиска из разметки"
+	@echo "subscriber-directory — пересобрать справочник абонентов стенда из data_example/"
 	@echo "measure-retrieval — качество поиска и цена порога (секунды)"
 	@echo "measure-reranking — кросс-энкодер против косинуса (минут двадцать)"
 	@echo "test        — тесты без внешних зависимостей"
@@ -63,6 +64,13 @@ measure-search:
 # сместился.
 golden-set:
 	$(PYTHON) scripts/build_golden_set.py
+
+# Справочник абонентов для демо-стенда (`web/subscribers.json`) — 200 карточек
+# из присланного примера Биллинга. Коммитится, как `kb/*.json`: маленький,
+# воспроизводимый, источник (`data_example/*.csv`) уже в репозитории. На
+# рабочей системе справочника нет — личность даёт SSO-сессия ЛК.
+subscriber-directory:
+	$(PYTHON) scripts/build_subscriber_directory.py
 
 # Качество поиска и цена порога. Секунды.
 measure-retrieval: golden-set

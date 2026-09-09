@@ -249,6 +249,17 @@ class CsvBillingSource:
 
     # --- чтение ------------------------------------------------------------ #
 
+    def accounts(self) -> list[Account]:
+        """Все лицевые счета примера.
+
+        В протокол :class:`BillingSource` **не входит**: ассистенту перечень всех
+        абонентов не нужен, а настоящий API Биллинга его и не отдаст. Метод —
+        только для демо-стенда: справочник с поиском по абоненту
+        (`scripts/build_subscriber_directory.py`) собирается из этого списка,
+        потому что войти на стенде можно любым из примерных абонентов.
+        """
+        return list(self._accounts.values())
+
     def account(self, number: str) -> Account | None:
         return self._accounts.get(number.strip())
 
