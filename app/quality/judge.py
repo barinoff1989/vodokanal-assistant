@@ -221,10 +221,12 @@ class AnswerJudge:
             "messages": messages,
             "temperature": 0.0,
             "max_tokens": 400,
-            # Судья обязан вернуть JSON. Провайдеры, которые режим не понимают,
-            # параметр отбросят (`drop_params: true` в litellm_config.yaml),
-            # разбор ответа рассчитан и на «JSON внутри текста».
+            # Судья обязан вернуть JSON. `drop_params` — на случай провайдера,
+            # который режим не понимает (маршрутизатор `litellm_settings` не
+            # читает, поэтому передаём явно); разбор ответа всё равно рассчитан
+            # и на «JSON внутри пояснения».
             "response_format": {"type": "json_object"},
+            "drop_params": True,
         }
         if self._complete is not None:
             return await self._complete(**params)
