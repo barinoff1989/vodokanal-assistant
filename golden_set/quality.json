@@ -1,0 +1,13 @@
+{
+  "judge_alias": "local-test",
+  "judge_model": "ollama_chat/qwen2.5:7b-instruct-q4_K_M",
+  "answering_alias": "yandexgpt",
+  "golden_set_version": "7eab00d6be95",
+  "questions_total": 30,
+  "questions_scored": 30,
+  "faithfulness_avg": 0.9133,
+  "answer_relevancy_avg": 0.57,
+  "pass_rate": 0.0333,
+  "skipped": false,
+  "skip_reason": null
+}
