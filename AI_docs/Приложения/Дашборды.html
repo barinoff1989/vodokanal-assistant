@@ -224,10 +224,10 @@ WHERE ts &gt; now() - INTERVAL 1 HOUR</td>
           </tr>
           <tr>
             <td class="name">RAG Quality</td>
-            <td>Тренд Faithfulness и Answer Relevancy по ночному батчу Ragas на Golden Set</td>
-            <td class="src">ClickHouse<br>(Ragas batch)</td>
-            <td class="query">SELECT avg(faithfulness), avg(answer_relevancy)
-FROM rag_eval_nightly WHERE run_date = today()</td>
+            <td>Тренд Faithfulness и Answer Relevancy по ночному прогону судьи на Golden Set. Строка со <code>skipped = true</code> — прогон пропущен из-за failover генерации (судья совпал с отвечающей моделью, ADR-007)</td>
+            <td class="src">ClickHouse<br>(на прототипе — Postgres <code>quality_reports</code>, <code>scripts/run_quality_eval.py</code>)</td>
+            <td class="query">SELECT faithfulness_avg, answer_relevancy_avg, pass_rate
+FROM quality_reports WHERE NOT skipped ORDER BY at DESC LIMIT 1</td>
             <td><span class="pill warn">warn &lt; 0.85 / 0.80</span></td>
           </tr>
           <tr>
