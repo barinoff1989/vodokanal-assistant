@@ -27,6 +27,7 @@ from app.config import get_settings
 from app.documents.responder import TemplateResponder
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
+from app.gateway.usage import UsageStore
 from app.kb.build import build_knowledge_base
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
@@ -173,6 +174,25 @@ def _build_billing_source() -> BillingSource | None:
     return CsvBillingSource(path)
 
 
+def _build_usage() -> UsageStore:
+    """Хранилище событий использования — роль ClickHouse на прототипе.
+
+    Выключается само, если нет Postgres или драйвера: телеметрия важна, но её
+    отсутствие не должно ронять сервис. Prometheus при этом работает — пути
+    независимы.
+    """
+    settings = get_settings()
+    try:
+        import psycopg
+
+        store = UsageStore(lambda: psycopg.connect(settings.telemetry_dsn))
+        store.ensure_schema()
+        return store
+    except Exception as exc:  # noqa: BLE001 — драйвера может не быть, базы тоже
+        logger.warning("запись событий использования выключена: %s", exc)
+        return UsageStore(None)
+
+
 def _build_registrar(
     quota_client: object | None, billing: BillingSource | None
 ) -> tuple[SessionStore, Registrar | None]:
@@ -225,6 +245,7 @@ def create() -> object:
     settings = get_settings()
     quota, redis_client = _build_quota()
     billing = _build_billing_source()
+    usage = _build_usage()
     sessions, registrar = _build_registrar(redis_client, billing)
 
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
@@ -247,7 +268,7 @@ def create() -> object:
         )
 
     with _stage("слой защиты: обезличиватель и охранители"):
-        gateway = LlmGateway(quota=quota, settings=settings)
+        gateway = LlmGateway(quota=quota, settings=settings, usage=usage)
 
     with _stage("база знаний: модель эмбеддингов и индексация"):
         knowledge_base = build_knowledge_base()

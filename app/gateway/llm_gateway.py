@@ -42,6 +42,7 @@ from app.config import Settings, get_settings
 from app.gateway.guardrails import StreamGuard, SyncGuardrails
 from app.gateway.pii_filter import PiiSanitizer
 from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
+from app.gateway.usage import UsageEvent, UsageStore
 from app.metrics import prometheus as metrics
 from app.models import (
     DoneEvent,
@@ -102,6 +103,11 @@ class LlmGateway:
         только для служебных вызовов внутри процесса, не для пути абонента.
     :param completion: функция обращения к модели. По умолчанию берётся LiteLLM
         лениво, чтобы импорт модуля не тянул тяжёлую зависимость.
+    :param usage: куда писать событие каждого вызова (токены, модель, latency,
+        исход). ``None`` — не пишется. Роль «Billing Callback» диаграммы C4_L3_LLM:
+        на прототипе это таблица в Postgres, на MVP — ClickHouse (раздел 35.1).
+        Запись best-effort и **после** сборки ответа — во время до первого куска
+        не входит.
     """
 
     def __init__(
@@ -112,6 +118,7 @@ class LlmGateway:
         guardrails: SyncGuardrails | None = None,
         completion: Callable[..., Awaitable[Any]] | None = None,
         settings: Settings | None = None,
+        usage: UsageStore | None = None,
     ) -> None:
         self._settings = settings if settings is not None else get_settings()
         self._sanitizer = sanitizer if sanitizer is not None else PiiSanitizer()
@@ -120,7 +127,52 @@ class LlmGateway:
         )
         self._quota = quota
         self._completion = completion
+        self._usage = usage
         self._router_instance: Any = None
+
+    def _record_usage(
+        self,
+        request: GenerateRequest,
+        trace_id: str,
+        *,
+        outcome: str,
+        report: PiiReport,
+        model: str = "",
+        usage: Usage | None = None,
+        finish_reason: FinishReason = FinishReason.STOP,
+        guardrail_reason: str | None = None,
+        ttft_ms: int | None = None,
+        total_ms: int | None = None,
+    ) -> None:
+        """Записать событие вызова. Best-effort — телеметрия не роняет ответ."""
+        if self._usage is None:
+            return
+        used = usage or Usage()
+        self._usage.record(
+            UsageEvent(
+                trace_id=trace_id,
+                subscriber_id=request.metadata.subscriber_id,
+                session_id=request.metadata.session_id,
+                channel=request.metadata.channel.value,
+                provider_alias=self._settings.llm_provider,
+                model=model,
+                inquiry_type=(
+                    request.metadata.inquiry_type.value
+                    if request.metadata.inquiry_type
+                    else None
+                ),
+                topic=request.metadata.topic.value if request.metadata.topic else None,
+                prompt_tokens=used.prompt_tokens,
+                completion_tokens=used.completion_tokens,
+                ttft_ms=ttft_ms,
+                total_ms=total_ms,
+                outcome=outcome,
+                finish_reason=finish_reason.value,
+                guardrail_reason=guardrail_reason,
+                pii_detected=report.pii_detected,
+                pii_entities=list(report.entities),
+            )
+        )
 
     def warmup(self) -> None:
         """Прогреть тяжёлые зависимости до первого запроса абонента.
@@ -327,21 +379,33 @@ class LlmGateway:
     async def generate(self, request: GenerateRequest) -> GenerateResponse | ProblemDetail:
         """Получить ответ целиком. Для служебных вызовов, не для пути абонента."""
         trace_id = self.new_trace_id()
+        started = time.perf_counter()
 
         if (problem := self._check_quota(request, trace_id)) is not None:
             return problem
 
         messages, report = self._prepare(request)
 
+        def _elapsed_ms() -> int:
+            return int((time.perf_counter() - started) * 1000)
+
         try:
             raw = await self._call(request, messages, stream=False)
         except ProviderTimeoutError as exc:
             logger.warning("провайдер не ответил вовремя: %s | %s", exc, trace_id)
+            self._record_usage(
+                request, trace_id, outcome="error", report=report,
+                finish_reason=FinishReason.ERROR, total_ms=_elapsed_ms(),
+            )
             return self.problem(
                 "upstream-timeout", "LLM provider timeout", 504, trace_id, UPSTREAM_DETAIL
             )
         except Exception as exc:  # noqa: BLE001 — любая ошибка провайдера это 502
             logger.warning("провайдер ответил ошибкой: %s | %s", exc, trace_id)
+            self._record_usage(
+                request, trace_id, outcome="error", report=report,
+                finish_reason=FinishReason.ERROR, total_ms=_elapsed_ms(),
+            )
             return self.problem(
                 "upstream-unavailable", "LLM provider unavailable", 502, trace_id,
                 UPSTREAM_DETAIL,
@@ -358,26 +422,31 @@ class LlmGateway:
         if not verdict.allowed:
             answer = verdict.text_for_subscriber or ""
 
-        metrics.record_provider_used(
-            alias=self._settings.llm_provider, model=str(getattr(raw, "model", ""))
-        )
+        model_used = str(getattr(raw, "model", ""))
+        metrics.record_provider_used(alias=self._settings.llm_provider, model=model_used)
         usage = _extract_usage(raw)
         metrics.record_tokens(
             prompt=usage.prompt_tokens, completion=usage.completion_tokens
         )
 
+        finish = verdict.finish_reason or FinishReason.STOP
+        self._record_usage(
+            request, trace_id,
+            outcome="blocked" if not verdict.allowed else "ok",
+            report=report, model=model_used, usage=usage, finish_reason=finish,
+            guardrail_reason=verdict.reason.value if verdict.reason else None,
+            total_ms=_elapsed_ms(),
+        )
+
         return GenerateResponse(
             answer=answer,
             model=self._settings.llm_provider,
-            finish_reason=verdict.finish_reason or FinishReason.STOP,
+            finish_reason=finish,
             usage=usage,
             sources=self._sources(request),
             disclaimer=self._context_disclaimer(request),
             pii_report=report,
-            routing={
-                "provider": self._settings.llm_provider,
-                "model": str(getattr(raw, "model", "")),
-            },
+            routing={"provider": self._settings.llm_provider, "model": model_used},
             trace_id=trace_id,
         )
 
@@ -406,12 +475,19 @@ class LlmGateway:
 
         messages, report = self._prepare(request)
 
+        def _err_ms() -> int:
+            return int((time.perf_counter() - started) * 1000)
+
         try:
             raw_stream = await self._call(request, messages, stream=True)
         except ProviderTimeoutError as exc:
             logger.warning("провайдер не ответил вовремя: %s | %s", exc, trace_id)
             metrics.record_response(
                 channel=channel, inquiry_type=inquiry_type, outcome="error"
+            )
+            self._record_usage(
+                request, trace_id, outcome="error", report=report,
+                finish_reason=FinishReason.ERROR, total_ms=_err_ms(),
             )
             yield ErrorEvent(
                 problem=self.problem(
@@ -424,6 +500,10 @@ class LlmGateway:
             logger.warning("провайдер ответил ошибкой: %s | %s", exc, trace_id)
             metrics.record_response(
                 channel=channel, inquiry_type=inquiry_type, outcome="error"
+            )
+            self._record_usage(
+                request, trace_id, outcome="error", report=report,
+                finish_reason=FinishReason.ERROR, total_ms=_err_ms(),
             )
             yield ErrorEvent(
                 problem=self.problem(
@@ -486,6 +566,19 @@ class LlmGateway:
         # триггер №2 ADR-002 и прогноз OPEX считались по ним же.
         metrics.record_tokens(
             prompt=usage.prompt_tokens, completion=usage.completion_tokens
+        )
+
+        # Событие использования — после того как ответ собран целиком (см. шапку
+        # `app/gateway/usage.py`): во время до первого куска эта запись не входит.
+        total_seconds = time.perf_counter() - started
+        self._record_usage(
+            request, trace_id,
+            outcome="blocked" if blocked else "ok",
+            report=report, model=answering_model, usage=usage,
+            finish_reason=FinishReason.GUARDRAIL if blocked else FinishReason.STOP,
+            guardrail_reason=guard.verdict.reason.value if guard.verdict.reason else None,
+            ttft_ms=int(first_delta_at * 1000) if first_delta_at is not None else None,
+            total_ms=int(total_seconds * 1000),
         )
 
         yield MetadataEvent(

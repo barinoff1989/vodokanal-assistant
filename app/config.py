@@ -313,6 +313,26 @@ class Settings(BaseSettings):
     lk_db: str = "lk_stub"
     inquiries_db: str = "inquiries_stub"
 
+    # Не слепок чужой системы — наше хранилище телеметрии (роль ClickHouse на
+    # прототипе, раздел 35.1). Одна строка на вызов LLM Gateway.
+    telemetry_db: str = "telemetry"
+
+    @property
+    def _postgres_prefix(self) -> str:
+        return (
+            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}"
+        )
+
+    @property
+    def telemetry_dsn(self) -> str:
+        """Строка подключения к базе телеметрии.
+
+        Собирается из частей — по той же причине, что `inquiries_dsn`: хост и
+        пароль в двух местах разошлись бы при первой правке.
+        """
+        return f"{self._postgres_prefix}/{self.telemetry_db}"
+
     @property
     def inquiries_dsn(self) -> str:
         """Строка подключения к базе обращений.
@@ -321,10 +341,7 @@ class Settings(BaseSettings):
         пароль жили бы в двух местах и разошлись бы при первой правке — этот
         класс ошибки проект проходил трижды (журнал, разделы 41.1, 43.2, 49.2).
         """
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.inquiries_db}"
-        )
+        return f"{self._postgres_prefix}/{self.inquiries_db}"
 
     @property
     def is_production(self) -> bool:

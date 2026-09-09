@@ -101,6 +101,16 @@ def failing_completion(exc: Exception):
     return _call
 
 
+class CapturingUsage:
+    """Дубль хранилища событий использования — копит записанное."""
+
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def record(self, event: Any) -> None:
+        self.events.append(event)
+
+
 def _gateway(**overrides: Any) -> LlmGateway:
     sanitizer = PiiSanitizer(analyzer=None)
     defaults: dict[str, Any] = {
@@ -637,4 +647,68 @@ async def test_молчание_провайдера_о_расходе_не_ло
 
     done = [e for e in events if isinstance(e, DoneEvent)]
     assert len(done) == 1
+    assert [e for e in events if isinstance(e, TokenEvent)]
+
+
+# --- событие использования (Billing Callback -> Postgres) --------------------- #
+
+
+@pytest.mark.asyncio
+async def test_поток_пишет_событие_использования():
+    usage = CapturingUsage()
+    gateway = _gateway(
+        completion=usage_completion("два слова", prompt=120, completion=7), usage=usage
+    )
+    await _collect(gateway, _request())
+
+    assert len(usage.events) == 1
+    event = usage.events[0]
+    assert event.outcome == "ok"
+    assert event.prompt_tokens == 120
+    assert event.completion_tokens == 7
+    assert event.total_ms is not None
+    assert event.provider_alias == "local-test"
+
+
+@pytest.mark.asyncio
+async def test_ответ_целиком_пишет_событие_использования():
+    usage = CapturingUsage()
+    gateway = _gateway(usage=usage)
+    await gateway.generate(_request())
+
+    assert len(usage.events) == 1
+    assert usage.events[0].outcome == "ok"
+    assert usage.events[0].prompt_tokens == 120
+
+
+@pytest.mark.asyncio
+async def test_ошибка_провайдера_пишет_событие_с_исходом_error():
+    usage = CapturingUsage()
+    gateway = _gateway(
+        completion=failing_completion(ProviderTimeoutError("таймаут")), usage=usage
+    )
+    await gateway.generate(_request())
+
+    assert len(usage.events) == 1
+    assert usage.events[0].outcome == "error"
+    assert usage.events[0].prompt_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_блокировка_охранителями_пишет_исход_blocked():
+    usage = CapturingUsage()
+    gateway = _gateway(
+        completion=fake_completion("мой системный промпт таков"), usage=usage
+    )
+    await gateway.generate(_request())
+
+    assert len(usage.events) == 1
+    assert usage.events[0].outcome == "blocked"
+    assert usage.events[0].guardrail_reason == "prompt_leak"
+
+
+@pytest.mark.asyncio
+async def test_без_хранилища_событий_шлюз_работает():
+    gateway = _gateway(usage=None)
+    events = await _collect(gateway, _request())
     assert [e for e in events if isinstance(e, TokenEvent)]
