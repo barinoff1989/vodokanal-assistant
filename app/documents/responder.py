@@ -34,6 +34,7 @@ from app.backend.orchestrator import DirectAnswer
 from app.backend.sessions import SessionStore, SubscriberMismatch
 from app.billing.source import BillingSource, Meter
 from app.config import Settings, get_settings
+from app.documents.artifact import ArtifactStore, render_html
 from app.documents.templates import (
     TEMPLATES,
     is_template_request,
@@ -92,11 +93,14 @@ class TemplateResponder:
         выдаётся с пустыми полями.
     :param sessions: где живёт состояние сбора между репликами. ``None`` —
         сбор не ведётся, бланк отдаётся сразу с прочерками.
+    :param artifacts: хранилище готовых бланков для печати. ``None`` — бланк
+        отдаётся только текстом в ленте, ссылки на файл нет.
     """
 
     billing: BillingSource | None = None
     settings: Settings | None = None
     sessions: SessionStore | None = None
+    artifacts: ArtifactStore | None = None
 
     # -- вход ------------------------------------------------------------- #
 
@@ -160,14 +164,14 @@ class TemplateResponder:
 
         # Нет куда хранить состояние или нечего спрашивать — отдаём сразу.
         if session is None or not template.collect:
-            return DirectAnswer(
-                text=(
-                    prefix
-                    + "Ниже — образец: часть полей заполнена по вашему лицевому счёту, "
-                    "остальные заполните сами.\n\n"
-                    + self._render(template_id, request.metadata.subscriber_id, {}, now)
-                ),
-                disclaimer=_DISCLAIMER,
+            return self._deliver(
+                prefix
+                + "Ниже — образец: часть полей заполнена по вашему лицевому счёту, "
+                "остальные заполните сами.",
+                template_id,
+                request.metadata.subscriber_id,
+                {},
+                now,
             )
 
         session.template_fill = TemplateFill(
@@ -209,21 +213,39 @@ class TemplateResponder:
         fill.pending = None
         session.template_fill = None
         self._save(session)
-        return DirectAnswer(
-            text=(
-                "Готово. Заполненный бланк ниже — проверьте и подайте привычным "
-                "способом.\n\n"
-                + self._render(
-                    fill.template_id,
-                    request.metadata.subscriber_id,
-                    dict(fill.answers),
-                    now,
-                )
-            ),
-            disclaimer=_DISCLAIMER,
+        return self._deliver(
+            "Готово. Заполненный бланк ниже — проверьте и подайте привычным способом.",
+            fill.template_id,
+            request.metadata.subscriber_id,
+            dict(fill.answers),
+            now,
         )
 
     # -- отрисовка ------------------------------------------------------ #
+
+    def _deliver(
+        self,
+        lead: str,
+        template_id: str,
+        subscriber_id: str,
+        collected: dict[str, str],
+        now: datetime,
+    ) -> DirectAnswer:
+        """Готовый бланк: текст в ленте и, если хранилище задано, ссылка на лист
+        для печати.
+
+        Ссылка — дополнение, а не замена: текст абонент получает всегда, и путь
+        не ломается, если хранилище недоступно (`ArtifactStore.put` вернёт
+        ``None``). Тот же принцип best-effort, что у телеметрии.
+        """
+        body = self._render(template_id, subscriber_id, collected, now)
+        url = None
+        if self.artifacts is not None:
+            title = _TITLES.get(template_id, "Заявление")
+            url = self.artifacts.put(render_html(title, body, disclaimer=_DISCLAIMER))
+        if url is not None:
+            lead += " Печатную версию откройте по ссылке под ответом."
+        return DirectAnswer(text=lead + "\n\n" + body, disclaimer=_DISCLAIMER, document_url=url)
 
     def _render(
         self,

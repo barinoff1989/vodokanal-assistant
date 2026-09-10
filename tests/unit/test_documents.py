@@ -297,3 +297,51 @@ def test_без_хранилища_сессий_бланк_отдаётся_ср
     assert answer is not None
     assert "ЗАЯВЛЕНИЕ" in answer.text
     assert "Задам" not in answer.text
+
+
+# --- готовый бланк как файл ---------------------------------------- #
+
+
+def test_с_хранилищем_бланк_приходит_ещё_и_ссылкой(
+    billing: CsvBillingSource, tmp_path: Path
+):
+    from app.documents.artifact import ArtifactStore
+
+    store = ArtifactStore(root=tmp_path, ttl_seconds=3600)
+    responder = TemplateResponder(
+        billing=billing, settings=Settings(_env_file=None), artifacts=store
+    )
+    answer = responder.answer(ask("дай бланк на поверку"), now=NOW)
+    assert answer is not None
+    assert answer.document_url is not None
+    assert "ЗАЯВЛЕНИЕ" in answer.text  # текст в ленте остаётся
+    assert "ссылке" in answer.text.lower()
+
+    token = answer.document_url.rsplit("/", 1)[-1]
+    page = store.get(token)
+    assert page is not None
+    account = billing.account(SUB)
+    assert account is not None
+    assert account.full_name in page  # данные абонента попали в лист для печати
+    assert "window.print()" in page
+
+
+def test_отказ_хранилища_не_ломает_выдачу_бланка(
+    billing: CsvBillingSource, tmp_path: Path
+):
+    from app.documents.artifact import ArtifactStore
+
+    class _BrokenStore(ArtifactStore):
+        def put(self, html_text: str) -> str | None:
+            return None
+
+    responder = TemplateResponder(
+        billing=billing,
+        settings=Settings(_env_file=None),
+        artifacts=_BrokenStore(root=tmp_path, ttl_seconds=3600),
+    )
+    answer = responder.answer(ask("дай бланк на поверку"), now=NOW)
+    assert answer is not None
+    assert answer.document_url is None
+    assert "ЗАЯВЛЕНИЕ" in answer.text  # текст пришёл, путь не сломался
+    assert "ссылке" not in answer.text.lower()

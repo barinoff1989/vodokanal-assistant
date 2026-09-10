@@ -24,6 +24,7 @@ from app.backend.sessions import SessionStore
 from app.billing.answer import AccountResponder
 from app.billing.source import BillingSource
 from app.config import get_settings
+from app.documents.artifact import ArtifactStore
 from app.documents.responder import TemplateResponder
 from app.gateway.llm_gateway import LlmGateway
 from app.gateway.quota import QuotaManager
@@ -193,6 +194,20 @@ def _build_usage() -> UsageStore:
         return UsageStore(None)
 
 
+def _build_documents() -> ArtifactStore:
+    """Хранилище готовых бланков — дубль S3/MinIO на прототипе.
+
+    Каталог создаётся при первой записи, не здесь: пустой каталог до первого
+    бланка незачем. Отказ файловой системы гасится в самом `put` — сборка
+    приложения из-за него не падает.
+    """
+    settings = get_settings()
+    return ArtifactStore(
+        root=Path(settings.document_store_path),
+        ttl_seconds=settings.document_link_ttl_seconds,
+    )
+
+
 def _build_registrar(
     quota_client: object | None, billing: BillingSource | None
 ) -> tuple[SessionStore, Registrar | None]:
@@ -246,6 +261,7 @@ def create() -> object:
     quota, redis_client = _build_quota()
     billing = _build_billing_source()
     usage = _build_usage()
+    documents = _build_documents()
     sessions, registrar = _build_registrar(redis_client, billing)
 
     # Порядок опроса значим: ответчики возвращают None на чужой теме, но
@@ -253,7 +269,7 @@ def create() -> object:
     with _stage("прямые ответчики: реестр, тарифы, отключения, лицевой счёт, бланки"):
         account = AccountResponder(billing) if billing is not None else None
         templates = TemplateResponder(
-            billing=billing, settings=settings, sessions=sessions
+            billing=billing, settings=settings, sessions=sessions, artifacts=documents
         )
         responders = tuple(
             r
@@ -283,7 +299,7 @@ def create() -> object:
         registrar=registrar,
     )
     logger.info("подъём завершён за %.1f с", time.perf_counter() - started)
-    return create_app(orchestrator)
+    return create_app(orchestrator, documents=documents)
 
 
 app = create()

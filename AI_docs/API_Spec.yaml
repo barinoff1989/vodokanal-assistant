@@ -343,6 +343,12 @@ components:
           - type: 'null'
           default: null
           title: Disclaimer
+        document_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Document Url
         pii_report:
           $ref: '#/components/schemas/PiiReport'
         routing:
@@ -471,6 +477,12 @@ components:
           - type: 'null'
           default: null
           title: Disclaimer
+        document_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Document Url
       title: MetadataEvent
       type: object
     PiiReport:

@@ -77,6 +77,12 @@ class DirectAnswer:
 
     text: str
     disclaimer: str | None = None
+    document_url: str | None = None
+    """Ссылка на готовый бланк заявления для печати (тема `template`).
+
+    Ответчик образцов кладёт заполненный бланк в хранилище и возвращает ссылку;
+    оркестратор пробрасывает её в `MetadataEvent`/`GenerateResponse`, а виджет
+    показывает панелью. `None` — обычный прямой ответ без документа."""
 
 
 class DirectResponder(Protocol):
@@ -395,6 +401,7 @@ class Orchestrator:
             model="direct",
             confidence_score=1.0,
             disclaimer=answer.disclaimer,
+            document_url=answer.document_url,
             suggested_actions=list(self._pending_actions),
             trace_id=trace_id,
             routing={"path": "direct"},
@@ -422,6 +429,7 @@ class Orchestrator:
             yield MetadataEvent(
                 confidence_score=1.0,
                 disclaimer=answer.disclaimer,
+                document_url=answer.document_url,
                 suggested_actions=list(self._pending_actions),
             )
             yield DoneEvent(

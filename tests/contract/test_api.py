@@ -285,3 +285,44 @@ def test_настройка_времени_повтора_доходит_до_з
 
     assert response.status_code == 503
     assert response.headers["Retry-After"] == "77"
+
+
+# --- маршрут готового бланка (стенд, не контракт /v1) ------------------------- #
+
+
+def _docs_client(tmp_path: Any) -> tuple[TestClient, Any]:
+    from app.documents.artifact import ArtifactStore
+
+    store = ArtifactStore(root=tmp_path, ttl_seconds=3600)
+    return TestClient(create_app(FakeGateway(), documents=store)), store
+
+
+def test_бланк_отдаётся_по_ссылке_html_страницей(tmp_path: Any):
+    client, store = _docs_client(tmp_path)
+    url = store.put("<!doctype html><p>бланк</p>")
+    assert url is not None
+
+    response = client.get(url)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "бланк" in response.text
+
+
+def test_неизвестный_бланк_это_404_в_формате_rfc7807(tmp_path: Any):
+    client, _ = _docs_client(tmp_path)
+    response = client.get("/documents/нетакогобланка00")
+    assert response.status_code == 404
+    assert PROBLEM_JSON in response.headers["content-type"]
+
+
+def test_маршрут_бланка_не_поднимается_без_хранилища():
+    """Часть стенда: нет хранилища — нет и адреса."""
+    client = TestClient(create_app(FakeGateway()))
+    assert client.get("/documents/whatever000000000").status_code == 404
+
+
+def test_бланка_нет_в_контракте_v1(tmp_path: Any):
+    """Правило 4.4: `/documents` — доставка стенда, как `/` и `/static`."""
+    client, _ = _docs_client(tmp_path)
+    schema = client.get("/openapi.json").json()
+    assert not any(path.startswith("/documents") for path in schema["paths"])

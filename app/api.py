@@ -23,11 +23,18 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app.backend.orchestrator import Orchestrator
+from app.documents.artifact import ArtifactStore
 from app.gateway.llm_gateway import LlmGateway
 from app.metrics import prometheus as metrics
 from app.models import (
@@ -74,13 +81,21 @@ def _sse(event_name: str, payload: dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
+def create_app(
+    orchestrator: Orchestrator | None = None,
+    *,
+    documents: ArtifactStore | None = None,
+) -> FastAPI:
     """Собрать приложение.
 
     Внедряется **оркестратор**, а не шлюз: по разделу 5.2 выбор пути ответа и
     сборка контекста — дело Backend, и HTTP-слою достаточно знать, что кто-то
     отдаёт ему поток событий. Подменяется он, а не сетевой слой, — иначе
     проверки требовали бы Redis и платного внешнего API.
+
+    :param documents: хранилище готовых бланков. Задано — поднимается маршрут
+        `/documents/{token}`, отдающий лист заявления для печати. Это часть
+        стенда, как `/` и `/static`, а не контракта `/v1` (правило 4.4).
     """
     resolved = orchestrator if orchestrator is not None else Orchestrator(LlmGateway())
 
@@ -170,6 +185,25 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # Готовый бланк заявления для печати. Маршрут стенда, не контракта: ссылку
+    # выдаёт ответчик образцов в поле `document_url`, содержимое — HTML под A4.
+    if documents is not None:
+
+        @app.get("/documents/{token}", include_in_schema=False)
+        async def document(token: str) -> Response:
+            page = documents.get(token)
+            if page is None:
+                return _problem_response(
+                    ProblemDetail(
+                        type="https://vodokanal.example/errors/not-found",
+                        title="Not found",
+                        status=404,
+                        detail="Бланк не найден или срок ссылки истёк.",
+                        instance="/documents",
+                    )
+                )
+            return HTMLResponse(content=page)
 
     # Демо-стенд. Только на прототипе — см. примечание в начале модуля.
     if WEB_DIR.is_dir():
