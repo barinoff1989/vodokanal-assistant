@@ -333,6 +333,9 @@ class GenerateResponse(BaseModel):
     confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
     suggested_actions: list[SuggestedAction] = Field(default_factory=list)
     disclaimer: str | None = None
+    document_url: str | None = None
+    """Ссылка на готовый бланк заявления — то же, что в :class:`MetadataEvent`,
+    для ответа целиком (служебные вызовы)."""
     pii_report: PiiReport = Field(default_factory=PiiReport)
     routing: dict[str, Any] = Field(default_factory=dict)
     trace_id: str
@@ -392,6 +395,14 @@ class MetadataEvent(BaseModel):
     confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
     suggested_actions: list[SuggestedAction] = Field(default_factory=list)
     disclaimer: str | None = None
+
+    document_url: str | None = None
+    """Ссылка на готовый бланк заявления для печати (тема `template`).
+
+    Заполнена, когда ответчик образцов собрал бланк и положил его в хранилище
+    (`app/documents/artifact.py`). Виджет показывает её отдельной панелью —
+    состояние Document Panel на C3 виджета. На прототипе ведёт на маршрут стенда,
+    не входящий в контракт `/v1`."""
 
 
 class DoneEvent(BaseModel):
