@@ -396,3 +396,69 @@ def test_интерфейс_прогревает_настоящий_оркест
         pass
 
     assert warmed == ["да"], "интерфейс не прогрел настоящий оркестратор при запуске"
+
+
+# --- адрес берётся из Биллинга, а не из запроса ------------------------------- #
+
+
+class _FakeBilling:
+    """Биллинг-заглушка: знает адрес одного абонента."""
+
+    def __init__(self, mapping: dict[str, str]) -> None:
+        self._mapping = mapping
+
+    def account(self, number: str) -> Any:
+        addr = self._mapping.get(number)
+        if addr is None:
+            return None
+        return type("Acc", (), {"address": addr})()
+
+
+class _AddressSpy:
+    """Прямой ответчик, запоминающий адрес, с которым его позвали."""
+
+    def __init__(self) -> None:
+        self.seen: list[str | None] = []
+
+    def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer:  # noqa: ARG002
+        self.seen.append(request.metadata.address)
+        return DirectAnswer(text="ок")
+
+
+async def test_адрес_подставляется_из_биллинга_а_не_из_запроса():
+    spy = _AddressSpy()
+    backend = Orchestrator(
+        _gateway(),
+        direct=(spy,),
+        billing=_FakeBilling({"sub-1": "г. Воронеж, ул. Ленина, д. 1, кв. 5"}),
+    )
+    # клиент прислал чужой адрес — он игнорируется
+    await backend.generate(
+        _request(metadata=RequestMetadata(
+            subscriber_id="sub-1", session_id="s", address="г. Москва, чужой, д. 9"
+        ))
+    )
+    assert spy.seen == ["г. Воронеж, ул. Ленина, д. 1, кв. 5"]
+
+
+async def test_неизвестный_абонент_адрес_сбрасывается():
+    spy = _AddressSpy()
+    backend = Orchestrator(_gateway(), direct=(spy,), billing=_FakeBilling({}))
+    await backend.generate(
+        _request(metadata=RequestMetadata(
+            subscriber_id="sub-x", session_id="s", address="г. Где-то, д. 1"
+        ))
+    )
+    assert spy.seen == [None]
+
+
+async def test_без_биллинга_адрес_из_запроса_сохраняется():
+    """Служебные вызовы и проверки задают адрес сами."""
+    spy = _AddressSpy()
+    backend = Orchestrator(_gateway(), direct=(spy,))
+    await backend.generate(
+        _request(metadata=RequestMetadata(
+            subscriber_id="sub-1", session_id="s", address="г. Воронеж, д. 2"
+        ))
+    )
+    assert spy.seen == ["г. Воронеж, д. 2"]

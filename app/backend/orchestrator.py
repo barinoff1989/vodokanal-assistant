@@ -47,6 +47,7 @@ from app.agents.advisor import Advisor
 from app.agents.triage import Triage
 from app.backend.registration import Registrar
 from app.backend.sessions import SessionStore, SubscriberMismatch
+from app.billing.source import BillingSource
 from app.config import Settings, get_settings
 from app.gateway.llm_gateway import GatewayEvent, LlmGateway
 from app.gateway.quota import QuotaManager, QuotaStoreUnavailableError
@@ -107,6 +108,9 @@ class Orchestrator:
         означало бы ответ без опоры на регламенты.
     :param direct: ответчики, отвечающие без модели. Опрашиваются по порядку.
     :param quota: учёт лимитов для путей, которые до шлюза не доходят.
+    :param billing: источник профиля абонента. Задан — адрес в метаданных
+        запроса берётся отсюда по идентификатору абонента, а не из того, что
+        прислал клиент (см. :meth:`_with_address`).
     """
 
     def __init__(
@@ -121,6 +125,7 @@ class Orchestrator:
         settings: Settings | None = None,
         sessions: SessionStore | None = None,
         registrar: Registrar | None = None,
+        billing: BillingSource | None = None,
     ) -> None:
         self._gateway = gateway
         self._kb = knowledge_base
@@ -129,6 +134,7 @@ class Orchestrator:
         self._settings = settings if settings is not None else get_settings()
         self._sessions = sessions
         self._registrar = registrar
+        self._billing = billing
         # Кнопки, относящиеся к текущему ответу. Живут на экземпляре, а не
         # в возвращаемом значении, чтобы не менять подпись `_route`, общую
         # для потока и ответа целиком.
@@ -189,6 +195,29 @@ class Orchestrator:
         metadata = request.metadata.model_copy(
             update={"topic": result.topic, "inquiry_type": result.inquiry_type}
         )
+        return request.model_copy(update={"metadata": metadata})
+
+    def _with_address(self, request: GenerateRequest) -> GenerateRequest:
+        """Проставить адрес абонента из Биллинга по его идентификатору.
+
+        **Адрес принадлежит Биллингу (файл `ЛСФЛ`, источник 1), а не запросу.**
+        Личный кабинет его показывает, но ведёт — Биллинг; на MVP Backend и так
+        читает оттуда данные абонента (раздел 5.3). Поэтому значение, присланное
+        клиентом в метаданных, **не используется**: клиент мог бы прислать чужой
+        адрес и получить график отключений по нему (та же логика, что у проверки
+        `subscriber_id` в `SessionStore`, риск Spoofing).
+
+        `billing` не задан — поведение прежнее (адрес из запроса): проверки
+        ответчика отключений подают его сами. Абонента нет в Биллинге — адрес
+        сбрасывается: отвечать про место, которого мы не подтвердили, нельзя.
+        """
+        if self._billing is None:
+            return request
+        account = self._billing.account(request.metadata.subscriber_id)
+        resolved = account.address if account is not None else None
+        if resolved == request.metadata.address:
+            return request
+        metadata = request.metadata.model_copy(update={"address": resolved})
         return request.model_copy(update={"metadata": metadata})
 
     # --- регистрация обращения (Этап 2) -------------------------------------- #
@@ -369,6 +398,7 @@ class Orchestrator:
             return request, decided[0]
 
         request = self._triaged(request)
+        request = self._with_address(request)
         self._pending_actions = ()
 
         if (direct := self._direct_answer(request)) is not None:

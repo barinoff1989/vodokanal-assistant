@@ -297,6 +297,7 @@ def create() -> object:
         settings=settings,
         sessions=sessions,
         registrar=registrar,
+        billing=billing,
     )
     logger.info("подъём завершён за %.1f с", time.perf_counter() - started)
     return create_app(orchestrator, documents=documents)
