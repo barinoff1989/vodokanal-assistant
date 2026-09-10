@@ -228,6 +228,23 @@ function renderSources(node, sources, disclaimer) {
   node.parentElement.appendChild(block);
 }
 
+// Готовый бланк заявления — состояние Document Panel на C3 виджета. Приходит
+// ссылкой в metadata-событии; сам лист (HTML под печать) отдаёт маршрут стенда
+// /documents/<токен>, в контракт /v1 он не входит. Ссылка живёт ограниченный
+// срок: в бланке ФИО и лицевой счёт абонента.
+function renderDocument(node, url) {
+  if (!url) return;
+  const block = document.createElement("div");
+  block.className = "document";
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = "Открыть заполненный бланк для печати";
+  block.appendChild(link);
+  node.parentElement.appendChild(block);
+}
+
 function renderActions(node, actions) {
   if (!actions || !actions.length) return;
   const block = document.createElement("div");
@@ -401,7 +418,12 @@ async function ask(question, intent) {
         } else if (event.name === "metadata") {
           renderSources(node, event.data.sources, event.data.disclaimer);
           renderActions(node, event.data.suggested_actions);
-          logEvent("metadata", (event.data.sources || []).length + " источник(ов)");
+          renderDocument(node, event.data.document_url);
+          logEvent(
+            "metadata",
+            (event.data.sources || []).length + " источник(ов)" +
+              (event.data.document_url ? ", бланк по ссылке" : ""),
+          );
         } else if (event.name === "done") {
           ui.trace.textContent = event.data.trace_id || "—";
           ui.finish.textContent = event.data.finish_reason || "—";
