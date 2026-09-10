@@ -145,3 +145,60 @@ def test_схема_применяется_к_настоящей_базе():
             (REPORT.golden_set_version,),
         )
         assert cur.fetchone()[0] >= 1
+
+
+# --- пооответные оценки: quality_assessments -------------------------------- #
+
+from app.quality.store import (  # noqa: E402
+    ASSESSMENT_SCHEMA_PATH,
+    AssessmentStore,
+    QualityAssessment,
+)
+
+ASSESSMENT = QualityAssessment(
+    trace_id="trace-abc123",
+    subscriber_id="2100202213",
+    session_id="sess-1",
+    outcome="scored",
+    topic="general",
+    judge_model="ollama/qwen2.5:7b",
+    faithfulness=0.9,
+    answer_relevancy=0.6,
+    provisional=True,
+)
+
+
+def test_оценка_выключена_молча_ничего_не_делает():
+    AssessmentStore(None).record(ASSESSMENT)
+
+
+def test_оценка_записывается_одним_insert(conn: FakeConnection):
+    store = AssessmentStore(lambda: conn)
+    store.ensure_schema()
+    before = conn.commits
+    store.record(ASSESSMENT)
+    inserts = [s for s, _ in conn.executed if "INSERT INTO quality_assessments" in s]
+    assert len(inserts) == 1
+    assert conn.commits == before + 1
+
+
+def test_в_запрос_идут_trace_id_числа_и_provisional(conn: FakeConnection):
+    AssessmentStore(lambda: conn).record(ASSESSMENT)
+    _, params = next(
+        r for r in conn.executed if "INSERT INTO quality_assessments" in r[0]
+    )
+    assert ASSESSMENT.trace_id in params
+    assert ASSESSMENT.faithfulness in params
+    assert ASSESSMENT.answer_relevancy in params
+    assert True in params  # provisional
+    assert "scored" in params
+
+
+def test_оценка_отказ_хранилища_не_пробрасывается(caplog: pytest.LogCaptureFixture):
+    AssessmentStore(BrokenConnection).record(ASSESSMENT)
+    assert caplog.records
+
+
+def test_путь_схемы_оценок_существует():
+    assert ASSESSMENT_SCHEMA_PATH.exists()
+    assert "quality_assessments" in ASSESSMENT_SCHEMA_PATH.read_text(encoding="utf-8")

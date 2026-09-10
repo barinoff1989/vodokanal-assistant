@@ -1,14 +1,19 @@
-"""Запись отчётов о качестве — `quality_report` раздела 35.1.
+"""Запись качества — два зерна: прогон (`quality_reports`) и ответ (`quality_assessments`).
 
 На MVP итог оценки судьёй уходит в ClickHouse рядом с телеметрией использования;
-на прототипе ClickHouse не развёрнут, и его роль занимает таблица
-`quality_reports` в базе `telemetry` (той же, что `usage_events`).
+на прототипе ClickHouse не развёрнут, и его роль занимают таблицы в базе
+`telemetry` (той же, что `usage_events`).
 
-Зерно — прогон, не ответ: ночной прогон пишет средние по эталонному набору плюс
-долю ответов выше стартовых порогов. Сравнивают между собой именно прогоны
-(базовая линия и регрессия, раздел 36.3).
+* `QualityStore` → `quality_reports`. Зерно — прогон: ночной прогон
+  (`scripts/run_quality_eval.py`) пишет средние по эталонному набору плюс долю
+  ответов выше стартовых порогов. Сравнивают между собой именно прогоны (базовая
+  линия и регрессия, раздел 36.3).
+* `AssessmentStore` → `quality_assessments`. Зерно — ответ: судья оценивает
+  конкретный живой ответ после того, как поток дошёл до абонента (async-часть
+  Guardrails, C4_L3_LLM). Для разреза качества в реальном времени.
 
-Запись best-effort — как `UsageStore`: отчёт качества не должен ронять прогон.
+Запись best-effort — как `UsageStore`: качество не должно ронять ни прогон, ни
+ответ абоненту.
 """
 
 from __future__ import annotations
@@ -18,18 +23,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-__all__ = ["SCHEMA_PATH", "QualityReport", "QualityStore"]
+__all__ = [
+    "ASSESSMENT_SCHEMA_PATH",
+    "SCHEMA_PATH",
+    "AssessmentStore",
+    "QualityAssessment",
+    "QualityReport",
+    "QualityStore",
+]
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "docker"
-    / "postgres"
-    / "init"
-    / "04_quality_reports.sql"
-)
+_INIT = Path(__file__).resolve().parents[2] / "docker" / "postgres" / "init"
+
+SCHEMA_PATH = _INIT / "04_quality_reports.sql"
 """Единственное место, где написана схема — как у `app/gateway/usage.py`."""
+
+ASSESSMENT_SCHEMA_PATH = _INIT / "05_quality_assessments.sql"
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,3 +119,83 @@ class QualityStore:
                 conn.commit()
         except Exception as exc:  # noqa: BLE001 — отчёт качества не роняет прогон
             logger.warning("отчёт о качестве не записан (%s)", exc)
+
+
+@dataclass(frozen=True, slots=True)
+class QualityAssessment:
+    """Оценка судьёй одного живого ответа."""
+
+    trace_id: str
+    subscriber_id: str
+    session_id: str
+    outcome: str
+    """`scored` | `unavailable` | `conflict`."""
+
+    topic: str | None = None
+    inquiry_type: str | None = None
+    judge_model: str = ""
+    faithfulness: float | None = None
+    answer_relevancy: float | None = None
+    provisional: bool = True
+    detail: str | None = None
+
+
+class AssessmentStore:
+    """Запись пооответных оценок качества в Postgres.
+
+    :param connect: как получить соединение (функция, а не готовое соединение).
+        `None` — запись выключена, `record` молча ничего не делает.
+    """
+
+    def __init__(self, connect: Any | None) -> None:
+        self._connect = connect
+        self._schema_applied = False
+
+    @property
+    def enabled(self) -> bool:
+        return self._connect is not None
+
+    def ensure_schema(self) -> None:
+        """Применить схему, если её ещё нет. Идемпотентно."""
+        if self._connect is None or self._schema_applied:
+            return
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(ASSESSMENT_SCHEMA_PATH.read_text(encoding="utf-8"))
+            conn.commit()
+        self._schema_applied = True
+
+    def record(self, assessment: QualityAssessment) -> None:
+        """Записать оценку. Отказ хранилища — предупреждение, не исключение."""
+        if self._connect is None:
+            return
+        try:
+            self.ensure_schema()
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO quality_assessments (
+                            trace_id, subscriber_id, session_id, topic,
+                            inquiry_type, judge_model, faithfulness,
+                            answer_relevancy, provisional, outcome, detail
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            assessment.trace_id,
+                            assessment.subscriber_id,
+                            assessment.session_id,
+                            assessment.topic,
+                            assessment.inquiry_type,
+                            assessment.judge_model,
+                            assessment.faithfulness,
+                            assessment.answer_relevancy,
+                            assessment.provisional,
+                            assessment.outcome,
+                            assessment.detail,
+                        ),
+                    )
+                conn.commit()
+        except Exception as exc:  # noqa: BLE001 — оценка не роняет ответ абоненту
+            logger.warning("оценка качества ответа не записана (%s)", exc)
