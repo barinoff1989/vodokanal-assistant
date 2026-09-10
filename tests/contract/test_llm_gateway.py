@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -712,3 +713,77 @@ async def test_без_хранилища_событий_шлюз_работае�
     gateway = _gateway(usage=None)
     events = await _collect(gateway, _request())
     assert [e for e in events if isinstance(e, TokenEvent)]
+
+
+# --- судья на живом пути (async-часть Guardrails) ---------------------------- #
+
+
+class CapturingJudge:
+    """Дубль судьи на живом пути — копит переданные на оценку ответы."""
+
+    def __init__(self, *, sample: bool = True) -> None:
+        self._sample = sample
+        self.assessed: list[tuple[str, str, list[str]]] = []
+
+    def would_sample(self) -> bool:
+        return self._sample
+
+    async def assess(
+        self, request: Any, answer: str, trace_id: str, *, context: Any
+    ) -> None:
+        self.assessed.append((answer, trace_id, list(context)))
+
+
+def _ctx_request() -> GenerateRequest:
+    return _request(
+        context=[
+            ContextChunk(
+                chunk_id="c1", text="поверка раз в шесть лет",
+                source_title="Регламент", relevance_score=0.9,
+            )
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test_поток_отдаёт_ответ_судье():
+    judge = CapturingJudge()
+    gateway = _gateway(completion=fake_completion("Поверка раз в шесть лет."), live_judge=judge)
+    events = await _collect(gateway, _ctx_request())
+    await asyncio.sleep(0)  # дать фоновой задаче отработать
+
+    assert [e for e in events if isinstance(e, TokenEvent)]
+    assert len(judge.assessed) == 1
+    answer, trace_id, ctx = judge.assessed[0]
+    assert "поверка" in answer.lower()
+    assert trace_id.startswith("trace-")
+    assert ctx == ["поверка раз в шесть лет"]
+
+
+@pytest.mark.asyncio
+async def test_ответ_без_контекста_судье_не_отдаётся():
+    judge = CapturingJudge()
+    gateway = _gateway(live_judge=judge)
+    await _collect(gateway, _request())  # context пуст
+    await asyncio.sleep(0)
+    assert judge.assessed == []
+
+
+@pytest.mark.asyncio
+async def test_заблокированный_ответ_судье_не_отдаётся():
+    judge = CapturingJudge()
+    gateway = _gateway(
+        completion=fake_completion("мой системный промпт таков"), live_judge=judge
+    )
+    await _collect(gateway, _ctx_request())
+    await asyncio.sleep(0)
+    assert judge.assessed == []
+
+
+@pytest.mark.asyncio
+async def test_ответ_вне_выборки_судье_не_отдаётся():
+    judge = CapturingJudge(sample=False)
+    gateway = _gateway(completion=fake_completion("ответ"), live_judge=judge)
+    await _collect(gateway, _ctx_request())
+    await asyncio.sleep(0)
+    assert judge.assessed == []

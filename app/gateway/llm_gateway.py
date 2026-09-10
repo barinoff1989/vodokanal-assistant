@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -57,6 +58,7 @@ from app.models import (
     TokenEvent,
     Usage,
 )
+from app.quality.live import LiveJudge
 
 __all__ = [
     "ERROR_BASE",
@@ -108,6 +110,9 @@ class LlmGateway:
         на прототипе это таблица в Postgres, на MVP — ClickHouse (раздел 35.1).
         Запись best-effort и **после** сборки ответа — во время до первого куска
         не входит.
+    :param live_judge: судья на живом пути — async-часть Guardrails диаграммы
+        C4_L3_LLM. ``None`` — не оценивается (работает только ночной прогон).
+        Зовётся фоновой задачей после стрима: правило 4.3 не нарушено.
     """
 
     def __init__(
@@ -119,6 +124,7 @@ class LlmGateway:
         completion: Callable[..., Awaitable[Any]] | None = None,
         settings: Settings | None = None,
         usage: UsageStore | None = None,
+        live_judge: LiveJudge | None = None,
     ) -> None:
         self._settings = settings if settings is not None else get_settings()
         self._sanitizer = sanitizer if sanitizer is not None else PiiSanitizer()
@@ -128,6 +134,8 @@ class LlmGateway:
         self._quota = quota
         self._completion = completion
         self._usage = usage
+        self._live_judge = live_judge
+        self._judge_tasks: set[asyncio.Task[None]] = set()
         self._router_instance: Any = None
 
     def _record_usage(
@@ -173,6 +181,30 @@ class LlmGateway:
                 pii_entities=list(report.entities),
             )
         )
+
+    def _spawn_judge(
+        self, request: GenerateRequest, answer: str, trace_id: str, *, blocked: bool
+    ) -> None:
+        """Запустить оценку ответа судьёй фоновой задачей — после стрима.
+
+        Правило 4.3 не нарушено: задача создаётся, когда абонент уже получил
+        ответ целиком. Ссылка на задачу держится до завершения, иначе цикл
+        событий может её собрать («Task was destroyed but it is pending»).
+
+        Не оцениваем: заблокированный ответ (судить safe fallback незачем),
+        ответ без контекста (нечего проверять на обоснованность), пустой ответ,
+        а также ответы вне выборки (`quality_sample_rate`).
+        """
+        if self._live_judge is None or blocked or not request.context:
+            return
+        if not answer.strip() or not self._live_judge.would_sample():
+            return
+        context = [chunk.text for chunk in request.context]
+        task = asyncio.create_task(
+            self._live_judge.assess(request, answer, trace_id, context=context)
+        )
+        self._judge_tasks.add(task)
+        task.add_done_callback(self._judge_tasks.discard)
 
     def warmup(self) -> None:
         """Прогреть тяжёлые зависимости до первого запроса абонента.
@@ -580,6 +612,10 @@ class LlmGateway:
             ttft_ms=int(first_delta_at * 1000) if first_delta_at is not None else None,
             total_ms=int(total_seconds * 1000),
         )
+
+        # Оценка ответа судьёй — async-часть Guardrails (C4_L3_LLM). Фоновой
+        # задачей: абонент ответ уже получил, правило 4.3 не нарушено.
+        self._spawn_judge(request, guard.text, trace_id, blocked=blocked)
 
         yield MetadataEvent(
             sources=self._sources(request),

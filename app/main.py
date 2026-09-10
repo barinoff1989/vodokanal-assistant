@@ -32,6 +32,9 @@ from app.gateway.usage import UsageStore
 from app.kb.build import build_knowledge_base
 from app.outages.answer import OutageResponder
 from app.outages.store import OutageStore
+from app.quality.judge import AnswerJudge
+from app.quality.live import LiveJudge
+from app.quality.store import AssessmentStore
 from app.regulated import RegulatedResponder
 from app.tariffs.answer import TariffResponder
 from app.tariffs.store import TariffStore
@@ -194,6 +197,31 @@ def _build_usage() -> UsageStore:
         return UsageStore(None)
 
 
+def _build_live_judge() -> LiveJudge | None:
+    """Судья на живом пути — async-часть Guardrails (C4_L3_LLM).
+
+    Выключается, если `quality_sample_rate = 0` или нет Postgres/драйвера:
+    оценка качества не должна ронять сервис, и ночной прогон от неё не зависит.
+    """
+    settings = get_settings()
+    if settings.quality_sample_rate <= 0.0:
+        return None
+    try:
+        import psycopg
+
+        store = AssessmentStore(lambda: psycopg.connect(settings.telemetry_dsn))
+        store.ensure_schema()
+        return LiveJudge(
+            judge=AnswerJudge(settings=settings),
+            store=store,
+            sample_rate=settings.quality_sample_rate,
+            answering_alias=settings.llm_provider,
+        )
+    except Exception as exc:  # noqa: BLE001 — драйвера может не быть, базы тоже
+        logger.warning("судья на живом пути выключен: %s", exc)
+        return None
+
+
 def _build_documents() -> ArtifactStore:
     """Хранилище готовых бланков — дубль S3/MinIO на прототипе.
 
@@ -261,6 +289,7 @@ def create() -> object:
     quota, redis_client = _build_quota()
     billing = _build_billing_source()
     usage = _build_usage()
+    live_judge = _build_live_judge()
     documents = _build_documents()
     sessions, registrar = _build_registrar(redis_client, billing)
 
@@ -284,7 +313,9 @@ def create() -> object:
         )
 
     with _stage("слой защиты: обезличиватель и охранители"):
-        gateway = LlmGateway(quota=quota, settings=settings, usage=usage)
+        gateway = LlmGateway(
+            quota=quota, settings=settings, usage=usage, live_judge=live_judge
+        )
 
     with _stage("база знаний: модель эмбеддингов и индексация"):
         knowledge_base = build_knowledge_base()
