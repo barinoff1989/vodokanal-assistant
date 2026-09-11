@@ -139,12 +139,42 @@ function selectSubscriber(account, { announce } = { announce: true }) {
   renderDirectory();
   renderProfile();
   if (announce && changed) {
+    // Диалог предыдущего абонента на экране — чужой чат для нового выбора;
+    // стирается, чтобы стенд не выглядел так, будто помощник помнит вопросы
+    // одного абонента, отвечая уже другому.
+    //
+    // SESSION_ID при этом НЕ меняется — это не ошибка, а нужное для
+    // демонстрации свойство: `session_id` в состоянии Redis остаётся
+    // привязан к прежнему абоненту (`SessionStore`), и именно на этом
+    // расхождении проверяется защита S1–S2 — попытка подтвердить черновик
+    // или продолжить сбор бланка от имени абонента, который его не начинал
+    // (`SubscriberMismatch`, риски Spoofing/IDOR, раздел 13). Очистка ленты
+    // меняет только то, что абонент **видит**, а не то, что помнит сервер.
+    resetDialog();
     addMessage(
       "assistant",
       "Вошли как " + entry.name + ". Сессия та же, идентификатор абонента " +
         "изменился — на этом и проверяется привязка сессии к абоненту.",
     );
   }
+}
+
+function resetDialog() {
+  ui.feed.innerHTML = "";
+  ui.confirm.hidden = true;
+  ui.query.value = "";
+  ui.counter.textContent = "0 / 2000";
+  tokensUsed = 0;
+  ui.trace.textContent = "—";
+  ui.pii.textContent = "—";
+  ui.model.textContent = "—";
+  ui.finish.textContent = "—";
+  ui.finish.classList.remove("alarm");
+  ui.model.classList.remove("alarm");
+  ui.pii.classList.remove("alarm");
+  ui.tokens.textContent = "—";
+  ui.ttft.textContent = "—";
+  setState("готов");
 }
 
 function renderProfile() {
