@@ -136,6 +136,13 @@ class TopicFallbackClassifier:
             # litellm_settings его не читает — тот же приём, что у судьи.
             "response_format": {"type": "json_object"},
             "drop_params": True,
+            # Таймаут отдан litellm, а не только внешнему asyncio.wait_for:
+            # замер (раздел 91 журнала) показал, что снаружи он не успевает
+            # прервать вызов — asyncio.wait_for не может отменить блокирующий
+            # ввод-вывод внутри клиента Ollama, только не дождаться его.
+            # Здесь — тот же приём, что уже стоит в самом шлюзе
+            # (litellm_config.yaml, `router_settings.timeout`).
+            "timeout": self._timeout,
         }
         if self._complete is not None:
             return await self._complete(**params)
