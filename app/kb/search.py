@@ -54,6 +54,8 @@ from typing import Protocol, cast
 from app.models import ContextChunk
 
 __all__ = [
+    "PASSAGE_PREFIX",
+    "QUERY_PREFIX",
     "Embedder",
     "KbItem",
     "KnowledgeBase",

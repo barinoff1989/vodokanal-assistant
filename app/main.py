@@ -322,8 +322,16 @@ def create() -> object:
     with _stage("база знаний: модель эмбеддингов и индексация"):
         knowledge_base = build_knowledge_base()
 
+    # Запасной классификатор темы переиспользует уже поднятую модель
+    # эмбеддингов базы знаний — вторая копия весов не грузится (раздел 92
+    # журнала). Базы знаний нет (пустой корпус) — классификатор выключен,
+    # как и сам поиск.
     triage = Triage(
-        model_fallback=TopicFallbackClassifier(settings=settings)
+        model_fallback=(
+            TopicFallbackClassifier(knowledge_base.embedder)
+            if knowledge_base is not None
+            else None
+        )
     )
     orchestrator = Orchestrator(
         gateway,

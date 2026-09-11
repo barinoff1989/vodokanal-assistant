@@ -1,180 +1,205 @@
-"""Запасной классификатор темы: локальная модель, только когда правила молчат.
+"""Запасной классификатор темы: эмбеддинги размеченных примеров, не модель-судья.
 
 ПОЧЕМУ НЕ ПЕРВЫЙ ГЕЙТ, А ЗАПАСНОЙ. `Topic` решает, звать ли модель вообще: пять
 тем (`outage`, `water_quality`, `tariff`, `account`, `template`) отвечаются без
-неё и намеренно быстро (ADR-012, ADR-013). Поставить модель первым гейтом
-значило бы звать её на каждый запрос — включая все пять путей, ради скорости
-которых правила и написаны, — до того как узнать, что она не нужна.
+неё и намеренно быстро (ADR-012, ADR-013). Здесь классификатор зовётся **только
+когда `Triage._topic_by_rules` не нашла ничего** — то есть ровно на подмножестве,
+которое сегодня и так уходит в `Topic.GENERAL` без вопросов. Живой пример —
+раздел 90 журнала: «По моему адресу до скольки отключение?» мимо маркеров
+`outage`.
 
-Здесь модель зовётся **только когда `Triage._topic_by_rules` не нашла ничего**
-— то есть ровно на том подмножестве, которое сегодня и так уходит в
-`Topic.GENERAL` без вопросов. По корректности хуже, чем сейчас, не станет:
-классификатор никогда не может увести на путь хуже отказа — только на верный
-путь вместо него (в худшем случае возвращает `None`, и это то же самое
-`GENERAL`, что и без него). **По задержке — честно, регрессия на этом
-подмножестве есть:** таймаут `topic_fallback_timeout_seconds` (раздел 91
-журнала — замер, а не ноль) добавляется к сегодняшнему быстрому провалу.
-Плата принята сознательно: несколько секунд за шанс на верный ответ лучше,
-чем мгновенный неверный, но только на подмножестве, где сегодня и так плохо —
-не на путях, которые отвечают без модели намеренно быстро (см. выше). Живой
-пример — раздел 90 журнала: «По моему адресу до скольки отключение?» не
-подошла ни под один маркер `TOPIC_MARKERS['outage']`.
+ПОЧЕМУ БЫЛА МОДЕЛЬ-СУДЬЯ (Qwen-7B, v4.54) И ПОЧЕМУ ЕЁ БОЛЬШЕ НЕТ. Первая
+редакция звала генеративную модель через Ollama на каждый промах правил.
+Замер (журнал раздел 91, 91.1) показал разброс 0,4 с – 11+ с: Ollama выгружает
+веса из памяти по простою (`OLLAMA_KEEP_ALIVE`), и генеративный вызов — это
+вызов модели в полном смысле, с его нестабильностью.
 
-МОДЕЛЬ ЛОКАЛЬНАЯ. `local-test` (Qwen2.5-7B через Ollama) уже поднята для
-судьи (ADR-007) и smoke-тестов — токенов не тратит, только процессор. На CPU
-без GPU вызов не бесплатен и не быстрый (раздел 91), поэтому — таймаут и
-вызов только на подмножестве, а не на каждом запросе (см. выше).
+**Здесь классификация — не генерация, а k-NN по эмбеддингам.** Та же модель
+(`intfloat/multilingual-e5-small`), что уже поднята и тёплая для поиска по базе
+знаний (`app/kb/search.py`) — второй копии не грузим, эмбеддер общий
+(`KnowledgeBase.embedder`). Один вызов `encode()` на вопрос — **~22 мс**
+(замер ADR-014), не секунды: это тот же самый шаг, что уже стоит на пути
+абонента при поиске по базе знаний, просто применённый к маленькому набору
+размеченных фраз вместо корпуса FAQ. Внешнего провайдера, Ollama, таймаута на
+холодный старт — ничего этого больше нет как класса.
 
-ЛЮБОЙ ОТКАЗ — ЭТО `None`, НЕ ИСКЛЮЧЕНИЕ. Модель не ответила, ответила не JSON'ом
-или сама выбрала `general` (то есть «ничего конкретного не нашла») — вызывающий
-код идёт по прежнему пути, как если бы классификатора не было вовсе. Отличать
-эти причины друг от друга не нужно: результат для маршрутизации один и тот же.
+ПОЧЕМУ ПРИМЕРЫ, А НЕ ПРОСЬБА К МОДЕЛИ «ОПРЕДЕЛИ ТЕМУ». Генеративная модель на
+классификации из шести слов не даёт ничего, чего не даёт близость эмбеддингов, а
+стоит ощутимо дороже по времени (раздел 91.1). Особенно на прототипе, где модель
+эмбеддингов и так резидентна.
+
+ПОРОГ — ПРЕДПОЛОЖЕНИЕ, ПОМЕЧЕННОЕ КАК ПРЕДПОЛОЖЕНИЕ. `TOPIC_MATCH_THRESHOLD` и
+`TOPIC_MATCH_MARGIN` подобраны проверкой на известных случаях (раздел 92
+журнала), не измерены на размеченном корпусе, потому что такого корпуса для
+тем — в отличие от `score_threshold` поиска (ADR-014) — ещё нет. Пересчитать,
+когда появится (пункт 84 TODO), тем же приёмом, что и `score_threshold`.
+
+ЛЮБОЙ ОТКАЗ — ЭТО `None`, НЕ ИСКЛЮЧЕНИЕ. Эмбеддер недоступен, тема не набрала
+порог или разрыв с соседней темой мал — вызывающий код идёт по прежнему пути,
+как если бы классификатора не было вовсе.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-import re
-from collections.abc import Awaitable, Callable
-from typing import Any
+from collections.abc import Sequence
+from dataclasses import dataclass
 
-from app.config import Settings, get_settings
-from app.taxonomy import Topic, coerce_topic
+from app.kb.search import PASSAGE_PREFIX, QUERY_PREFIX, Embedder, cosine
+from app.taxonomy import Topic
 
-__all__ = ["TopicFallbackClassifier"]
+__all__ = ["EXAMPLES", "TopicFallbackClassifier"]
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM = (
-    "Ты определяешь тему вопроса абонента водоканала. Отвечаешь строго одним "
-    "объектом JSON, без пояснений вокруг."
+TOPIC_MATCH_THRESHOLD = 0.90
+"""Ниже — тема не найдена. [ПРЕДПОЛОЖЕНИЕ], проверенное на пробе из полутора
+десятков вопросов (раздел 92 журнала), не на размеченном корпусе.
+
+**Первая цифра (0.80) не прошла проверку.** «Спасибо за помощь» дала 0.8687
+до темы `template`, «здравствуйте, подскажите пожалуйста» — 0.8932 до неё же:
+короткие фразы на этом языке и в этом домене (вода, счета, заявления) вообще
+не разделяются низким порогом — та же находка, что ADR-014 сделал для
+`score_threshold` поиска. Оба целевых случая сессии (раздел 90, 92) дают
+0.94–0.95 — 0.90 отсекает пустые совпадения и пропускает их."""
+
+TOPIC_MATCH_MARGIN = 0.03
+"""Насколько лучшая тема обязана опережать вторую (другую) по близости.
+
+Без разрыва предпочтение между двумя темами — вопрос третьего знака после
+запятой, а не сигнал: «почём кубометр воды» дал `outage` вместо `tariff` с
+разрывом 0.0053 — ошибка, которую разрыв и должен ловить. [ПРЕДПОЛОЖЕНИЕ],
+раздел 92 журнала."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Example:
+    text: str
+    topic: Topic
+
+
+EXAMPLES: tuple[_Example, ...] = (
+    # --- outage --------------------------------------------------------- #
+    _Example("У меня нет воды с самого утра", Topic.OUTAGE),
+    _Example("Когда включат воду в доме?", Topic.OUTAGE),
+    _Example("По моему адресу до скольки отключение?", Topic.OUTAGE),
+    _Example("Планируется ли отключение воды на этой неделе?", Topic.OUTAGE),
+    _Example("Почему опять нет холодной воды?", Topic.OUTAGE),
+    _Example("Сколько ещё ждать, пока дадут воду?", Topic.OUTAGE),
+    _Example("Есть ли плановые работы по моему адресу?", Topic.OUTAGE),
+    # --- water_quality ---------------------------------------------------- #
+    _Example("Вода из крана мутная", Topic.WATER_QUALITY),
+    _Example("Какого качества у вас питьевая вода?", Topic.WATER_QUALITY),
+    _Example("Вода пахнет хлоркой", Topic.WATER_QUALITY),
+    _Example("Почему вода жёлтая?", Topic.WATER_QUALITY),
+    _Example("У воды неприятный привкус", Topic.WATER_QUALITY),
+    _Example("Соответствует ли вода нормативам качества?", Topic.WATER_QUALITY),
+    # --- tariff ------------------------------------------------------------ #
+    _Example("Сколько стоит куб воды?", Topic.TARIFF),
+    _Example("Какой сейчас тариф на водоснабжение?", Topic.TARIFF),
+    _Example("По какой цене считают водоотведение?", Topic.TARIFF),
+    _Example("Сколько я плачу за кубометр воды?", Topic.TARIFF),
+    _Example("Изменился ли тариф с нового года?", Topic.TARIFF),
+    _Example("Почём вода за куб?", Topic.TARIFF),
+    # --- account ------------------------------------------------------------ #
+    _Example("Сколько я должен за воду?", Topic.ACCOUNT),
+    _Example("Какая у меня задолженность?", Topic.ACCOUNT),
+    _Example("Когда истекает срок поверки моего счётчика?", Topic.ACCOUNT),
+    _Example("Какие у меня последние показания счётчика?", Topic.ACCOUNT),
+    _Example("Сколько мне начислили за июнь?", Topic.ACCOUNT),
+    _Example("Есть ли на моём счёте долг?", Topic.ACCOUNT),
+    _Example("Что числится по моему лицевому счёту?", Topic.ACCOUNT),
+    # --- template ------------------------------------------------------------ #
+    _Example("Дайте бланк заявления на поверку", Topic.TEMPLATE),
+    _Example("Нужен образец заявления на опломбировку", Topic.TEMPLATE),
+    _Example("Нужно оформить новое подключение к сети водоснабжения", Topic.TEMPLATE),
+    _Example("Как получить бланк на установку счётчика?", Topic.TEMPLATE),
+    _Example("Хочу подключиться к водопроводу, что для этого нужно?", Topic.TEMPLATE),
+    _Example("Дайте форму заявления на замену прибора учёта", Topic.TEMPLATE),
+    _Example("Как оформить документы на подключение дома?", Topic.TEMPLATE),
+    _Example("Нужен образец справки об отсутствии задолженности", Topic.TEMPLATE),
 )
-
-_PROMPT = """\
-Определи тему вопроса — ровно одно значение:
-
-outage — жалоба на отсутствие воды либо вопрос про плановое/аварийное отключение
-water_quality — вопрос о качестве, цвете, запахе, привкусе воды
-tariff — вопрос о цене куба воды или водоотведения
-account — запрос факта по лицевому счёту: задолженность, начисления, срок
-          поверки, показания (не спор о них — «откуда долг» сюда не входит)
-template — просьба дать бланк или образец заявления
-general — всё остальное, включая вопросы не по теме
-
-Вопрос: {query}
-
-Верни только JSON: {{"topic": "<одно значение из списка выше>"}}
-"""
-
-_JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+"""Размеченные примеры — не корпус FAQ (пересечение с ним развело бы источники
+истины при первой правке FAQ), а короткие фразы по одной на распознаваемую
+форму вопроса. Собраны из docstring'ов `TOPIC_MARKERS`/`*_PATTERNS`
+(`app/agents/triage.py`) и живых находок сессии (разделы 90, 92 журнала)."""
 
 
 class TopicFallbackClassifier:
-    """Определяет тему одним коротким вызовом локальной модели.
+    """k-NN по эмбеддингам размеченных примеров — тема ближайшего соседа.
 
-    :param settings: настройки приложения; из них берётся псевдоним модели и
-        бюджет ожидания, если не заданы явно.
-    :param model_alias: псевдоним модели из `litellm_config.yaml`.
-    :param timeout_seconds: сколько ждать ответ, прежде чем считать модель
-        недоступной.
-    :param complete: функция обращения к модели. ``None`` — берётся
-        `litellm.Router` лениво, как в шлюзе и у судьи.
+    :param embedder: модель эмбеддингов. Берётся у уже поднятой базы знаний
+        (`KnowledgeBase.embedder`) — вторая копия весов не грузится.
+    :param examples: размеченные примеры. По умолчанию — :data:`EXAMPLES`;
+        параметр существует ради проверок на маленьком наборе.
+    :param threshold: порог близости. По умолчанию — :data:`TOPIC_MATCH_THRESHOLD`.
+    :param margin: обязательный отрыв от второй (другой) темы. По умолчанию —
+        :data:`TOPIC_MATCH_MARGIN`.
     """
 
     def __init__(
         self,
+        embedder: Embedder,
         *,
-        settings: Settings | None = None,
-        model_alias: str | None = None,
-        timeout_seconds: float | None = None,
-        complete: Callable[..., Awaitable[Any]] | None = None,
+        examples: Sequence[_Example] = EXAMPLES,
+        threshold: float = TOPIC_MATCH_THRESHOLD,
+        margin: float = TOPIC_MATCH_MARGIN,
     ) -> None:
-        self._settings = settings if settings is not None else get_settings()
-        self._alias = model_alias or self._settings.topic_fallback_provider
-        self._timeout = (
-            timeout_seconds
-            if timeout_seconds is not None
-            else self._settings.topic_fallback_timeout_seconds
-        )
-        self._complete = complete
-        self._router_instance: Any = None
+        self._embedder = embedder
+        self._examples = tuple(examples)
+        self._threshold = threshold
+        self._margin = margin
+        self._vectors: tuple[Sequence[float], ...] | None = None
+
+    def _ensure_vectors(self) -> tuple[Sequence[float], ...]:
+        """Проэмбеддить примеры один раз, лениво — при первом обращении.
+
+        Не в конструкторе: сборка приложения не должна ждать модель, если
+        запасной классификатор в итоге не понадобится ни разу за прогон
+        проверок."""
+        if self._vectors is None:
+            self._vectors = tuple(
+                self._embedder.encode(
+                    [PASSAGE_PREFIX + example.text for example in self._examples]
+                )
+            )
+        return self._vectors
 
     async def classify(self, query: str) -> Topic | None:
-        """Определить тему вопроса, который не узнали правила.
+        """Определить тему запроса, который не узнали правила.
 
-        ``None`` — модель недоступна, не ответила вовремя, вернула мусор либо
-        сама выбрала `general`. Все эти случаи равнозначны для вызывающего
-        кода: путь остаётся прежним.
+        ``None`` — ближайший пример не набрал порог, либо лучшая тема не
+        оторвалась от второй на нужный разрыв. И то и другое для вызывающего
+        кода означает одно: путь остаётся прежним (`Topic.GENERAL`).
+
+        Метод асинхронный ради того же вызова, что и у `Triage.classify_async`
+        (`await self._model_fallback.classify(query)`) — сам подсчёт
+        синхронный и быстрый (~22 мс, замер ADR-014), `await` здесь не ждёт
+        внешнего провайдера, а сохраняет единый интерфейс.
         """
+        if not query.strip() or not self._examples:
+            return None
         try:
-            raw = await asyncio.wait_for(self._call(query), timeout=self._timeout)
-        except TimeoutError:
-            logger.info("запасной классификатор темы не ответил за %.1f с", self._timeout)
-            return None
-        except Exception as exc:  # noqa: BLE001 — любой отказ модели равнозначен «не помогла»
-            logger.info("запасной классификатор темы недоступен (%s)", exc)
+            (vector,) = self._embedder.encode([QUERY_PREFIX + query])
+            vectors = self._ensure_vectors()
+        except Exception as exc:  # noqa: BLE001 — отказ эмбеддера не роняет путь
+            logger.warning("запасной классификатор темы недоступен (%s)", exc)
             return None
 
-        topic = _parse(raw)
-        if topic is None or topic is Topic.GENERAL:
+        scored = sorted(
+            (
+                (cosine(vector, example_vector), example.topic)
+                for example, example_vector in zip(self._examples, vectors, strict=True)
+            ),
+            key=lambda pair: -pair[0],
+        )
+        best_score, best_topic = scored[0]
+        if best_score < self._threshold:
             return None
-        return topic
 
-    async def _call(self, query: str) -> Any:
-        messages = [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": _PROMPT.format(query=query.strip())},
-        ]
-        params: dict[str, Any] = {
-            "model": self._alias,
-            "messages": messages,
-            "temperature": 0.0,
-            "max_tokens": 30,
-            # На случай провайдера, который режим не понимает; маршрутизатор
-            # litellm_settings его не читает — тот же приём, что у судьи.
-            "response_format": {"type": "json_object"},
-            "drop_params": True,
-            # Таймаут отдан litellm, а не только внешнему asyncio.wait_for:
-            # замер (раздел 91 журнала) показал, что снаружи он не успевает
-            # прервать вызов — asyncio.wait_for не может отменить блокирующий
-            # ввод-вывод внутри клиента Ollama, только не дождаться его.
-            # Здесь — тот же приём, что уже стоит в самом шлюзе
-            # (litellm_config.yaml, `router_settings.timeout`).
-            "timeout": self._timeout,
-        }
-        if self._complete is not None:
-            return await self._complete(**params)
-        return await self._router().acompletion(**params)
-
-    def _router(self) -> Any:
-        if self._router_instance is None:
-            from app.gateway.model_router import build_router
-
-            self._router_instance = build_router(self._settings)
-        return self._router_instance
-
-
-def _parse(raw: Any) -> Topic | None:
-    """Достать тему из ответа модели. Мусор — тоже `None`, не исключение."""
-    text = _extract_text(raw)
-    match = _JSON_OBJECT.search(text or "")
-    if match is None:
-        return None
-    try:
-        payload = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, dict) or "topic" not in payload:
-        return None
-    # coerce_topic никогда не бросает — значение вне справочника становится
-    # `general`, а он в classify() уже приравнен к «не помогла».
-    return coerce_topic(payload["topic"])
-
-
-def _extract_text(raw: Any) -> str:
-    try:
-        return str(raw.choices[0].message.content or "")
-    except (AttributeError, IndexError, TypeError):
-        return str(raw or "")
+        runner_up = next(
+            (score for score, topic in scored[1:] if topic is not best_topic), 0.0
+        )
+        if best_score - runner_up < self._margin:
+            return None
+        return best_topic
