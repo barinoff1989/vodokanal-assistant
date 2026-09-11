@@ -548,11 +548,15 @@ ui.query.addEventListener("input", () => {
   ui.counter.textContent = ui.query.value.length + " / 2000";
 });
 
-// Отправка по Ctrl+Enter — привычно и не мешает многострочному вводу.
+// Enter — отправка (привычно для чата), Shift+Enter — перенос строки, чтобы
+// многострочный ввод остался доступен. Ctrl/Cmd+Enter работает тоже —
+// прежняя привычка не ломается. `isComposing` бережёт ввод через IME
+// (подтверждение варианта клавишей Enter не должно улетать как отправка).
 ui.query.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-    ui.form.requestSubmit();
-  }
+  if (event.key !== "Enter" || event.isComposing) return;
+  if (event.shiftKey) return; // перенос строки — поведение textarea по умолчанию
+  event.preventDefault();
+  ui.form.requestSubmit();
 });
 
 ui.search.addEventListener("input", renderDirectory);
