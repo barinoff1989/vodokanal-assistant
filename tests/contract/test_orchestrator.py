@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from app.agents.triage import Triage
 from app.backend.orchestrator import DirectAnswer, Orchestrator
 from app.config import Settings
 from app.gateway.guardrails import SyncGuardrails
@@ -30,6 +31,7 @@ from app.models import (
     RequestMetadata,
     TokenEvent,
 )
+from app.taxonomy import Topic
 
 
 class FakeRedis:
@@ -64,6 +66,19 @@ class AlwaysAnswers:
 
 class NeverAnswers:
     def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer | None:  # noqa: ARG002
+        return None
+
+
+class TopicOnlyResponder:
+    """Отвечает, только если тема запроса — заданная. По образцу OutageResponder."""
+
+    def __init__(self, topic: Topic, text: str = "ответ по теме") -> None:
+        self._topic = topic
+        self._answer = DirectAnswer(text=text)
+
+    def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer | None:  # noqa: ARG002
+        if request.metadata.topic is self._topic:
+            return self._answer
         return None
 
 
@@ -462,3 +477,96 @@ async def test_без_биллинга_адрес_из_запроса_сохра
         ))
     )
     assert spy.seen == ["г. Воронеж, д. 2"]
+
+
+# --- запасной классификатор темы (app/agents/topic_fallback.py) --------------- #
+
+
+class _EmptyKnowledgeBase:
+    """Поиск, который никогда ничего не находит — включает отказ консультанта."""
+
+    def search(self, query: str, **kwargs: Any) -> list[ContextChunk]:  # noqa: ARG002
+        return []
+
+
+class FakeTopicFallback:
+    """Дубль запасного классификатора — отдаёт заданную тему без вызова модели."""
+
+    def __init__(self, topic: Topic | None) -> None:
+        self._topic = topic
+        self.calls = 0
+
+    async def classify(self, query: str) -> Topic | None:  # noqa: ARG002
+        self.calls += 1
+        return self._topic
+
+
+async def test_правила_не_нашли_тему_но_модель_помогла():
+    """Живой случай раздела 90 журнала: «отключение» без слова «вода» мимо
+    маркеров outage — запасной классификатор находит тему, ответчик отвечает."""
+    fallback = FakeTopicFallback(Topic.OUTAGE)
+    triage = Triage(model_fallback=fallback)
+    backend = Orchestrator(
+        _gateway(completion=_explode),
+        direct=(TopicOnlyResponder(Topic.OUTAGE),),
+        triage=triage,
+    )
+    response = await backend.generate(_request(query="по адресу до скольки отключение?"))
+
+    assert isinstance(response, GenerateResponse)
+    assert response.answer == "ответ по теме"
+    assert fallback.calls == 1
+
+
+async def test_модель_не_нашла_тему_путь_как_раньше():
+    """Запасной классификатор вернул None (модель тоже не помогла) — путь
+    прежний: тема остаётся GENERAL, до модели не дошло только благодаря тому,
+    что провайдер здесь заглушка, которая падает."""
+    fallback = FakeTopicFallback(None)
+    triage = Triage(model_fallback=fallback)
+    backend = Orchestrator(
+        _gateway(),
+        direct=(NeverAnswers(),),
+        triage=triage,
+        knowledge_base=_EmptyKnowledgeBase(),
+    )
+    response = await backend.generate(_request(query="по адресу до скольки отключение?"))
+
+    assert isinstance(response, GenerateResponse)
+    assert fallback.calls == 1
+    # Пустой поиск -> консультант отвечает без модели, как и без классификатора.
+    assert "нет сведений" in response.answer.lower()
+
+
+async def test_без_запасного_классификатора_поведение_прежнее():
+    """Triage() по умолчанию — как до этой правки, модель не зовётся вовсе."""
+    backend = Orchestrator(
+        _gateway(),
+        direct=(NeverAnswers(),),
+        knowledge_base=_EmptyKnowledgeBase(),
+    )
+    response = await backend.generate(_request(query="по адресу до скольки отключение?"))
+    assert isinstance(response, GenerateResponse)
+    assert "нет сведений" in response.answer.lower()
+
+
+async def test_тема_из_метаданных_классификатор_не_зовёт():
+    """Тема пришла снаружи — ни правила, ни модель её не трогают (раздел 79)."""
+    fallback = FakeTopicFallback(Topic.TARIFF)
+    triage = Triage(model_fallback=fallback)
+    backend = Orchestrator(
+        _gateway(completion=_explode),
+        direct=(TopicOnlyResponder(Topic.OUTAGE),),
+        triage=triage,
+    )
+    response = await backend.generate(
+        _request(
+            query="что угодно",
+            metadata=RequestMetadata(
+                subscriber_id="sub-1", session_id="s", topic=Topic.OUTAGE
+            ),
+        )
+    )
+    assert isinstance(response, GenerateResponse)
+    assert response.answer == "ответ по теме"
+    assert fallback.calls == 0

@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 from app.adapters.inquiry_service import InquiryServiceAdapter
+from app.agents.topic_fallback import TopicFallbackClassifier
+from app.agents.triage import Triage
 from app.backend.orchestrator import Orchestrator
 from app.backend.registration import Registrar
 from app.backend.sessions import SessionStore
@@ -320,6 +322,9 @@ def create() -> object:
     with _stage("база знаний: модель эмбеддингов и индексация"):
         knowledge_base = build_knowledge_base()
 
+    triage = Triage(
+        model_fallback=TopicFallbackClassifier(settings=settings)
+    )
     orchestrator = Orchestrator(
         gateway,
         knowledge_base=knowledge_base,
@@ -329,6 +334,7 @@ def create() -> object:
         sessions=sessions,
         registrar=registrar,
         billing=billing,
+        triage=triage,
     )
     logger.info("подъём завершён за %.1f с", time.perf_counter() - started)
     return create_app(orchestrator, documents=documents)

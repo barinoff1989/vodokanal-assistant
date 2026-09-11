@@ -171,7 +171,7 @@ class Orchestrator:
 
     # --- выбор пути ------------------------------------------------------- #
 
-    def _triaged(self, request: GenerateRequest) -> GenerateRequest:
+    async def _triaged(self, request: GenerateRequest) -> GenerateRequest:
         """Проставить тему и тип обращения, если их не проставили снаружи.
 
         Классификация идёт **до** выбора пути: тема решает, звать ли модель
@@ -181,8 +181,12 @@ class Orchestrator:
         по ним ответчики решают, их ли это случай, и по ним же разбиваются
         метрики. Второе место хранения того же значения развело бы их при первой
         правке.
+
+        Асинхронный метод — `Triage.classify_async` может звать запасной
+        классификатор темы (локальная модель), когда правила ничего не нашли
+        (`app/agents/topic_fallback.py`).
         """
-        result = self._triage.classify(
+        result = await self._triage.classify_async(
             request.query,
             topic=request.metadata.topic,
             inquiry_type=request.metadata.inquiry_type,
@@ -383,7 +387,9 @@ class Orchestrator:
 
     # --- пути ответа ------------------------------------------------------- #
 
-    def _route(self, request: GenerateRequest) -> tuple[GenerateRequest, DirectAnswer | None]:
+    async def _route(
+        self, request: GenerateRequest
+    ) -> tuple[GenerateRequest, DirectAnswer | None]:
         """Пройти путь до решения: классификация, ответчики, поиск, консультант.
 
         Возвращает подготовленный запрос и готовый ответ, если модель не нужна.
@@ -397,7 +403,7 @@ class Orchestrator:
             self._pending_actions = decided[1]
             return request, decided[0]
 
-        request = self._triaged(request)
+        request = await self._triaged(request)
         request = self._with_address(request)
         self._pending_actions = ()
 
@@ -409,7 +415,7 @@ class Orchestrator:
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse | ProblemDetail:
         """Ответ целиком. Для служебных вызовов, не для пути абонента."""
-        request, answer = self._route(request)
+        request, answer = await self._route(request)
         if answer is None:
             response = await self._gateway.generate(request)
             if isinstance(response, GenerateResponse):
@@ -440,7 +446,7 @@ class Orchestrator:
     async def stream(self, request: GenerateRequest) -> AsyncIterator[GatewayEvent]:
         """Ответ потоком — основной путь абонента (правило 4.3)."""
         started = time.perf_counter()
-        request, answer = self._route(request)
+        request, answer = await self._route(request)
 
         if answer is not None:
             trace_id = self._gateway.new_trace_id()

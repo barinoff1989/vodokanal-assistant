@@ -35,6 +35,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.agents.topic_fallback import TopicFallbackClassifier
 from app.taxonomy import InquiryType, Topic, classify_by_keywords, coerce, coerce_topic
 
 __all__ = [
@@ -203,11 +204,12 @@ class TriageResult:
     topic: Topic
     inquiry_type: InquiryType
     matched_by: str
-    """Чем распознана тема: `rule`, `metadata` или `default`.
+    """Чем распознана тема: `rule`, `model`, `metadata` или `default`.
 
     Нужно не для отладки: доля `default` показывает, как часто классификация
-    ничего не дала, и без разбивки она неотличима от доли настоящих общих
-    вопросов."""
+    ничего не дала (ни правила, ни запасной классификатор), а доля `model` —
+    как часто помогает запасной путь. Без разбивки обе неотличимы от доли
+    настоящих общих вопросов."""
 
     @property
     def needs_model(self) -> bool:
@@ -225,7 +227,15 @@ class Triage:
 
     Тяжёлого фреймворка агентов здесь нет намеренно: вся логика состояний живёт
     в автомате шага 2, а классификация — это разбор строки, а не сценарий.
+
+    :param model_fallback: запасной классификатор темы (локальная модель).
+        Зовётся только из :meth:`classify_async`, и только когда правила не
+        нашли тему — см. заголовок `app/agents/topic_fallback.py`. ``None`` —
+        поведение как раньше, тема не найдена правилами — `Topic.GENERAL`.
     """
+
+    def __init__(self, *, model_fallback: TopicFallbackClassifier | None = None) -> None:
+        self._model_fallback = model_fallback
 
     def classify(
         self,
@@ -234,13 +244,17 @@ class Triage:
         topic: Topic | None = None,
         inquiry_type: InquiryType | None = None,
     ) -> TriageResult:
-        """Определить тему и тип обращения.
+        """Определить тему и тип обращения — только правилами, без модели.
 
         :param topic: уже известная тема — например, пришедшая в метаданных
             запроса. Классификация её не переопределяет: пришедшее снаружи
             значение считается более осведомлённым, чем разбор строки.
         :param inquiry_type: то же для типа. Место для будущего режима с
             моделью: он проставит тип до вызова, а этот метод его сохранит.
+
+        Синхронный метод: годится там, где запасного классификатора нет или он
+        не нужен (проверки, служебные вызовы). Путь абонента идёт через
+        :meth:`classify_async`.
         """
         if topic is not None:
             return TriageResult(topic, coerce(inquiry_type), "metadata")
@@ -248,6 +262,34 @@ class Triage:
         detected = self._topic_by_rules(query)
         if detected is not None:
             return TriageResult(detected, self._type(query, inquiry_type), "rule")
+
+        return TriageResult(Topic.GENERAL, self._type(query, inquiry_type), "default")
+
+    async def classify_async(
+        self,
+        query: str,
+        *,
+        topic: Topic | None = None,
+        inquiry_type: InquiryType | None = None,
+    ) -> TriageResult:
+        """То же, что :meth:`classify`, плюс запасной классификатор темы.
+
+        Модель зовётся, только когда метаданные молчат и правила не нашли
+        ничего, — то есть ровно там, где :meth:`classify` вернула бы `default`.
+        Не хуже прежнего поведения ни при каких условиях: отказ модели даёт тот
+        же исход, что и её отсутствие.
+        """
+        if topic is not None:
+            return TriageResult(topic, coerce(inquiry_type), "metadata")
+
+        detected = self._topic_by_rules(query)
+        if detected is not None:
+            return TriageResult(detected, self._type(query, inquiry_type), "rule")
+
+        if self._model_fallback is not None:
+            via_model = await self._model_fallback.classify(query)
+            if via_model is not None:
+                return TriageResult(via_model, self._type(query, inquiry_type), "model")
 
         return TriageResult(Topic.GENERAL, self._type(query, inquiry_type), "default")
 
