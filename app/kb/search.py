@@ -192,6 +192,16 @@ class KnowledgeBase:
     def __len__(self) -> int:
         return len(self._entries)
 
+    @property
+    def embedder(self) -> Embedder:
+        """Модель эмбеддингов, которой проиндексирован корпус.
+
+        Открыта наружу, чтобы другие потребители того же процесса (запасной
+        классификатор темы, `app/agents/topic_fallback.py`) не грузили вторую
+        копию весов ради того же самого — модель эмбеддингов на прототипе не
+        бесплатна по времени подъёма (раздел 50.3)."""
+        return self._embedder
+
     @classmethod
     @classmethod
     def from_items(
