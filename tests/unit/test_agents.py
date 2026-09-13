@@ -173,6 +173,85 @@ def test_чем_распознано_видно_снаружи(triage: Triage):
     assert triage.classify("как передать показания").matched_by == "default"
 
 
+def test_чем_распознан_тип_видно_снаружи_отдельно_от_темы(triage: Triage):
+    """Тема и тип — разные оси: у обеих свой matched_by, независимо друг от друга."""
+    result = triage.classify("прошу опломбировать счётчик")
+    assert result.matched_by == "default"  # тема — общий вопрос
+    assert result.type_matched_by == "rule"  # тип нашёлся по ключевому слову
+
+    given = triage.classify("что угодно", inquiry_type=InquiryType.CERTIFICATE)
+    assert given.type_matched_by == "metadata"
+
+    nothing = triage.classify("asdfghjkl")
+    assert nothing.type_matched_by == "default"
+
+
+# --- запасной классификатор типа обращения (app/agents/inquiry_type_fallback.py) #
+
+
+class FakeTypeFallback:
+    """Дубль запасного классификатора типа — отдаёт заданное значение без модели."""
+
+    def __init__(self, inquiry_type: InquiryType | None) -> None:
+        self._type = inquiry_type
+        self.calls = 0
+
+    async def classify(self, query: str) -> InquiryType | None:  # noqa: ARG002
+        self.calls += 1
+        return self._type
+
+
+async def test_правила_не_нашли_тип_но_модель_помогла():
+    """Ключевые слова молчат на этом тексте (нет ни одного стема из KEYWORDS) —
+    запасной классификатор отвечает вместо `other`."""
+    fallback = FakeTypeFallback(InquiryType.METER_VERIFICATION)
+    triage = Triage(type_fallback=fallback)
+    result = await triage.classify_async("asdfghjkl")
+
+    assert result.inquiry_type is InquiryType.METER_VERIFICATION
+    assert result.type_matched_by == "model"
+    assert fallback.calls == 1
+
+
+async def test_модель_не_нашла_тип_путь_как_раньше():
+    fallback = FakeTypeFallback(None)
+    triage = Triage(type_fallback=fallback)
+    result = await triage.classify_async("asdfghjkl")
+
+    assert result.inquiry_type is InquiryType.OTHER
+    assert result.type_matched_by == "default"
+    assert fallback.calls == 1
+
+
+async def test_тип_найден_правилами_модель_не_зовётся():
+    """Ключевые слова уже дали ответ — запасной классификатор лишний."""
+    fallback = FakeTypeFallback(InquiryType.CERTIFICATE)
+    triage = Triage(type_fallback=fallback)
+    result = await triage.classify_async("прошу опломбировать счётчик")
+
+    assert result.type_matched_by == "rule"
+    assert fallback.calls == 0
+
+
+async def test_тип_передан_снаружи_модель_не_зовётся():
+    fallback = FakeTypeFallback(InquiryType.CERTIFICATE)
+    triage = Triage(type_fallback=fallback)
+    result = await triage.classify_async(
+        "что угодно", inquiry_type=InquiryType.METER_SEALING
+    )
+
+    assert result.inquiry_type is InquiryType.METER_SEALING
+    assert result.type_matched_by == "metadata"
+    assert fallback.calls == 0
+
+
+async def test_без_запасного_классификатора_типа_поведение_прежнее():
+    triage = Triage()
+    result = await triage.classify_async("asdfghjkl")
+    assert result.inquiry_type is InquiryType.OTHER
+    assert result.type_matched_by == "default"
+
+
 # --- консультант ---------------------------------------------------------------- #
 
 

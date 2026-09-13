@@ -182,9 +182,10 @@ class Orchestrator:
         метрики. Второе место хранения того же значения развело бы их при первой
         правке.
 
-        Асинхронный метод — `Triage.classify_async` может звать запасной
-        классификатор темы (локальная модель), когда правила ничего не нашли
-        (`app/agents/topic_fallback.py`).
+        Асинхронный метод — `Triage.classify_async` может звать запасные
+        классификаторы (эмбеддинги) для темы и для типа обращения, когда
+        правила/ключевые слова ничего не нашли (`app/agents/topic_fallback.py`,
+        `app/agents/inquiry_type_fallback.py`).
         """
         result = await self._triage.classify_async(
             request.query,

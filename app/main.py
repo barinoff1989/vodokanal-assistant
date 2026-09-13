@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.adapters.inquiry_service import InquiryServiceAdapter
+from app.agents.inquiry_type_fallback import InquiryTypeFallbackClassifier
 from app.agents.topic_fallback import TopicFallbackClassifier
 from app.agents.triage import Triage
 from app.backend.orchestrator import Orchestrator
@@ -322,16 +323,21 @@ def create() -> object:
     with _stage("база знаний: модель эмбеддингов и индексация"):
         knowledge_base = build_knowledge_base()
 
-    # Запасной классификатор темы переиспользует уже поднятую модель
-    # эмбеддингов базы знаний — вторая копия весов не грузится (раздел 92
-    # журнала). Базы знаний нет (пустой корпус) — классификатор выключен,
-    # как и сам поиск.
+    # Запасные классификаторы (тема и тип обращения) переиспользуют уже
+    # поднятую модель эмбеддингов базы знаний — вторая копия весов не
+    # грузится (раздел 92 журнала). Базы знаний нет (пустой корпус) — оба
+    # классификатора выключены, как и сам поиск.
     triage = Triage(
         model_fallback=(
             TopicFallbackClassifier(knowledge_base.embedder)
             if knowledge_base is not None
             else None
-        )
+        ),
+        type_fallback=(
+            InquiryTypeFallbackClassifier(knowledge_base.embedder)
+            if knowledge_base is not None
+            else None
+        ),
     )
     orchestrator = Orchestrator(
         gateway,

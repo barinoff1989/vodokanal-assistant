@@ -18,16 +18,19 @@
 «нет воды», «отключение», «качество воды». Это не упрощение, а следствие того,
 что тема выражает намерение, а не предмет.
 
-ПОЧЕМУ ТИП ОБРАЩЕНИЯ — ПОКА ТОЛЬКО ПО КЛЮЧЕВЫМ СЛОВАМ
+ПОЧЕМУ ТИП ОБРАЩЕНИЯ — ПО КЛЮЧЕВЫМ СЛОВАМ, А ЗАПАСНОЙ ПУТЬ — ТОЛЬКО НА СЕМЬ
+ИЗ ШЕСТНАДЦАТИ
 
-Тип нужен для регистрации (Этап 2) и для разбивки метрик. На Этапе 1 **ничего не
-регистрируется**, поэтому единственный его потребитель — метрика, и лишний вызов
-модели ради разбивки графика удвоил бы задержку и стоимость каждого ответа.
+Тип нужен для регистрации (`Registrar.offer`) и для разбивки метрик. Замер
+запасного режима по ключевым словам: охват 75%, точность 65% там, где сигнал
+есть (раздел 56.11) — для метрики достаточно, для регистрации мало.
 
-Замер запасного режима: охват 75%, точность 65% там, где сигнал есть (раздел
-56.11). Для метрики достаточно; для регистрации — нет, и к Этапу 2 сюда
-добавится режим с моделью. Место для него оставлено: :meth:`Triage.classify`
-принимает готовый тип извне.
+`classify_async` добавляет запасной классификатор эмбеддингами
+(`app/agents/inquiry_type_fallback.py`), но только на семь типов из
+`REGISTRABLE` — тех, по которым регистрация вообще предлагается. Остальные
+девять на прототипе не запускают действие (их потребитель — только метрика),
+а разбор реальных текстов показал, что там смешаны споры и заявки, для
+которых у модели нет надёжного примера (см. заголовок того модуля).
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.agents.inquiry_type_fallback import InquiryTypeFallbackClassifier
 from app.agents.topic_fallback import TopicFallbackClassifier
 from app.taxonomy import InquiryType, Topic, classify_by_keywords, coerce, coerce_topic
 
@@ -211,6 +215,14 @@ class TriageResult:
     как часто помогает запасной путь. Без разбивки обе неотличимы от доли
     настоящих общих вопросов."""
 
+    type_matched_by: str = "default"
+    """То же самое, но для `inquiry_type` — независимо от `matched_by`.
+
+    Тема и тип определяются раздельно: правила могут узнать тему и не узнать
+    тип (или наоборот). `model` здесь возможен только для семи регистрируемых
+    типов (`app/agents/inquiry_type_fallback.py`) — для остальных девяти
+    запасного классификатора нет, и `default` означает то же, что раньше."""
+
     @property
     def needs_model(self) -> bool:
         """Пойдёт ли запрос к модели.
@@ -228,14 +240,26 @@ class Triage:
     Тяжёлого фреймворка агентов здесь нет намеренно: вся логика состояний живёт
     в автомате шага 2, а классификация — это разбор строки, а не сценарий.
 
-    :param model_fallback: запасной классификатор темы (локальная модель).
+    :param model_fallback: запасной классификатор темы (эмбеддинги).
         Зовётся только из :meth:`classify_async`, и только когда правила не
         нашли тему — см. заголовок `app/agents/topic_fallback.py`. ``None`` —
         поведение как раньше, тема не найдена правилами — `Topic.GENERAL`.
+    :param type_fallback: запасной классификатор типа обращения (эмбеддинги,
+        только семь регистрируемых типов). Зовётся только из
+        :meth:`classify_async`, и только когда переданного значения нет и
+        ключевые слова не нашли ничего — см. заголовок
+        `app/agents/inquiry_type_fallback.py`. ``None`` — поведение как
+        раньше, тип не найден — `InquiryType.OTHER`.
     """
 
-    def __init__(self, *, model_fallback: TopicFallbackClassifier | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model_fallback: TopicFallbackClassifier | None = None,
+        type_fallback: InquiryTypeFallbackClassifier | None = None,
+    ) -> None:
         self._model_fallback = model_fallback
+        self._type_fallback = type_fallback
 
     def classify(
         self,
@@ -249,21 +273,27 @@ class Triage:
         :param topic: уже известная тема — например, пришедшая в метаданных
             запроса. Классификация её не переопределяет: пришедшее снаружи
             значение считается более осведомлённым, чем разбор строки.
-        :param inquiry_type: то же для типа. Место для будущего режима с
-            моделью: он проставит тип до вызова, а этот метод его сохранит.
+        :param inquiry_type: то же для типа. Значение, проставленное снаружи
+            (например, Этапом 2), этот метод сохранит без разбора строки.
 
         Синхронный метод: годится там, где запасного классификатора нет или он
         не нужен (проверки, служебные вызовы). Путь абонента идёт через
         :meth:`classify_async`.
+
+        Тип обращения определяется через :meth:`_type` — той же логикой
+        независимо от того, откуда взялась тема (правило, метаданные или
+        default): темы и типы — разные оси, известность одной не означает
+        известность другой.
         """
+        itype, type_matched_by = self._type(query, inquiry_type)
         if topic is not None:
-            return TriageResult(topic, coerce(inquiry_type), "metadata")
+            return TriageResult(topic, itype, "metadata", type_matched_by)
 
         detected = self._topic_by_rules(query)
         if detected is not None:
-            return TriageResult(detected, self._type(query, inquiry_type), "rule")
+            return TriageResult(detected, itype, "rule", type_matched_by)
 
-        return TriageResult(Topic.GENERAL, self._type(query, inquiry_type), "default")
+        return TriageResult(Topic.GENERAL, itype, "default", type_matched_by)
 
     async def classify_async(
         self,
@@ -272,26 +302,27 @@ class Triage:
         topic: Topic | None = None,
         inquiry_type: InquiryType | None = None,
     ) -> TriageResult:
-        """То же, что :meth:`classify`, плюс запасной классификатор темы.
+        """То же, что :meth:`classify`, плюс запасные классификаторы темы и типа.
 
-        Модель зовётся, только когда метаданные молчат и правила не нашли
-        ничего, — то есть ровно там, где :meth:`classify` вернула бы `default`.
-        Не хуже прежнего поведения ни при каких условиях: отказ модели даёт тот
-        же исход, что и её отсутствие.
+        Оба зовутся, только когда переданного значения нет и правила/ключевые
+        слова не нашли ничего, — то есть ровно там, где :meth:`classify`
+        вернула бы `default`. Не хуже прежнего поведения ни при каких
+        условиях: отказ модели даёт тот же исход, что и её отсутствие.
         """
+        itype, type_matched_by = await self._type_async(query, inquiry_type)
         if topic is not None:
-            return TriageResult(topic, coerce(inquiry_type), "metadata")
+            return TriageResult(topic, itype, "metadata", type_matched_by)
 
         detected = self._topic_by_rules(query)
         if detected is not None:
-            return TriageResult(detected, self._type(query, inquiry_type), "rule")
+            return TriageResult(detected, itype, "rule", type_matched_by)
 
         if self._model_fallback is not None:
             via_model = await self._model_fallback.classify(query)
             if via_model is not None:
-                return TriageResult(via_model, self._type(query, inquiry_type), "model")
+                return TriageResult(via_model, itype, "model", type_matched_by)
 
-        return TriageResult(Topic.GENERAL, self._type(query, inquiry_type), "default")
+        return TriageResult(Topic.GENERAL, itype, "default", type_matched_by)
 
     @staticmethod
     def _topic_by_rules(query: str) -> Topic | None:
@@ -316,8 +347,8 @@ class Triage:
         return None
 
     @staticmethod
-    def _type(query: str, given: InquiryType | None) -> InquiryType:
-        """Тип обращения: переданный, распознанный или `other`.
+    def _type(query: str, given: InquiryType | None) -> tuple[InquiryType, str]:
+        """Тип обращения и чем он определён: переданный, распознанный или `other`.
 
         Через :func:`coerce` проходит всё — и переданное снаружи тоже. Значение
         вне справочника отсюда выйти не может ни по одному пути; ровно это
@@ -325,12 +356,33 @@ class Triage:
         (дефект 11.8).
         """
         if given is not None:
-            return coerce(given)
+            return coerce(given), "metadata"
         codes = classify_by_keywords(query)
-        # Неоднозначность — свойство текста: каждый пятый настоящий текст даёт
-        # больше одного кода (раздел 56.11). Берётся первый, а не отбрасываются
-        # все: для метрики приблизительный тип полезнее отсутствующего.
-        return codes[0] if codes else InquiryType.OTHER
+        if codes:
+            # Неоднозначность — свойство текста: каждый пятый настоящий текст
+            # даёт больше одного кода (раздел 56.11). Берётся первый, а не
+            # отбрасываются все: для метрики приблизительный тип полезнее
+            # отсутствующего.
+            return codes[0], "rule"
+        return InquiryType.OTHER, "default"
+
+    async def _type_async(
+        self, query: str, given: InquiryType | None
+    ) -> tuple[InquiryType, str]:
+        """То же, что :meth:`_type`, плюс запасной классификатор эмбеддингами.
+
+        Зовётся, только когда :meth:`_type` не смогла определить тип сама
+        (нет переданного значения, ключевые слова молчат) — то есть только
+        там, где сейчас `other`. Классификатор знает лишь семь регистрируемых
+        типов (`app/agents/inquiry_type_fallback.py`) — для остальных девяти
+        результат не изменится."""
+        itype, matched_by = self._type(query, given)
+        if matched_by != "default" or self._type_fallback is None:
+            return itype, matched_by
+        via_model = await self._type_fallback.classify(query)
+        if via_model is not None:
+            return via_model, "model"
+        return itype, matched_by
 
 
 def coerce_result(topic: object, inquiry_type: object) -> TriageResult:
@@ -339,4 +391,6 @@ def coerce_result(topic: object, inquiry_type: object) -> TriageResult:
     Нужен там, где тема и тип приходят из внешнего источника — из метаданных
     запроса или из ответа модели на Этапе 2.
     """
-    return TriageResult(coerce_topic(topic), coerce(inquiry_type), "metadata")  # type: ignore[arg-type]
+    resolved_topic = coerce_topic(topic)  # type: ignore[arg-type]
+    resolved_type = coerce(inquiry_type)  # type: ignore[arg-type]
+    return TriageResult(resolved_topic, resolved_type, "metadata", "metadata")
