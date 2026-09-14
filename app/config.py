@@ -449,4 +449,7 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Настройки читаются один раз за процесс."""
+    from app.secrets_vault import load_into_environ
+
+    load_into_environ()
     return Settings()
