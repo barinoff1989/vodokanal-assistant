@@ -172,6 +172,25 @@ def build_knowledge_base(settings: Settings | None = None) -> KnowledgeBase | No
             settings.qdrant_collection,
         )
 
+    reranker = None
+    if settings.reranker_enabled:
+        # Ленивый импорт: та же причина, что у qdrant-client выше.
+        from app.kb.reranker import CrossEncoderReranker
+
+        reranker = CrossEncoderReranker(
+            settings.reranker_model, local_files_only=settings.embedding_local_files_only
+        )
+        # Индексация прогревает Embedder сама (encode() вызывается прямо
+        # сейчас, при сборке корпуса) — у реранкера такого триггера нет, и
+        # без явного прогрева загрузка спряталась бы в первый запрос абонента
+        # (та же ошибка, что уже находили четыре раза, см. docstring reranker.py).
+        reranker.warm_up()
+        logger.info("переранжирование: включено (%s)", settings.reranker_model)
+
     return KnowledgeBase.from_items(
-        items, embedder, part_max_chars=settings.kb_part_max_chars, store=store
+        items,
+        embedder,
+        part_max_chars=settings.kb_part_max_chars,
+        store=store,
+        reranker=reranker,
     )

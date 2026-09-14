@@ -52,9 +52,12 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from app.models import ContextChunk
+
+if TYPE_CHECKING:
+    from app.kb.reranker import Reranker
 
 __all__ = [
     "PASSAGE_PREFIX",
@@ -236,9 +239,12 @@ class InMemoryVectorStore:
 class KnowledgeBase:
     """Проиндексированный корпус и поиск по нему."""
 
-    def __init__(self, store: VectorStore, embedder: Embedder) -> None:
+    def __init__(
+        self, store: VectorStore, embedder: Embedder, reranker: Reranker | None = None
+    ) -> None:
         self._store = store
         self._embedder = embedder
+        self._reranker = reranker
 
     def __len__(self) -> int:
         return len(self._store)
@@ -261,6 +267,7 @@ class KnowledgeBase:
         *,
         part_max_chars: int = 300,
         store: VectorStore | None = None,
+        reranker: Reranker | None = None,
     ) -> KnowledgeBase:
         """Проиндексировать готовые записи, откуда бы они ни пришли.
 
@@ -268,6 +275,9 @@ class KnowledgeBase:
         :param part_max_chars: предел длины части тела при разрезании.
         :param store: куда положить векторы. По умолчанию — `InMemoryVectorStore`;
             для Qdrant передать `app.kb.qdrant_store.QdrantVectorStore(...)`.
+        :param reranker: кросс-энкодер поверх `top_k` (ADR-007). По умолчанию
+            выключен — `app.kb.reranker.CrossEncoderReranker` неработоспособен
+            на CPU синхронного пути (ADR-014), опция для офлайн/GPU-сценариев.
 
         **Один код на два источника, потому что устройство у них одно.** У пары
         FAQ вопрос и ответ; у раздела документа — путь заголовков и текст
@@ -312,7 +322,7 @@ class KnowledgeBase:
         ]
         store = store if store is not None else InMemoryVectorStore()
         store.upsert(entries)
-        return cls(store, embedder)
+        return cls(store, embedder, reranker)
 
     @classmethod
     def from_file(
@@ -322,11 +332,13 @@ class KnowledgeBase:
         *,
         part_max_chars: int = 300,
         store: VectorStore | None = None,
+        reranker: Reranker | None = None,
     ) -> KnowledgeBase:
         """Прочитать корпус FAQ и проиндексировать его целиком.
 
         :param part_max_chars: предел длины части ответа при разрезании.
         :param store: см. `from_items`.
+        :param reranker: см. `from_items`.
 
         Индексация двадцати фрагментов занимает доли секунды (замер ADR-014: 48
         фрагментов в секунду), поэтому делается при запуске, а не заранее. Когда
@@ -334,7 +346,11 @@ class KnowledgeBase:
         отключений.
         """
         return cls.from_items(
-            faq_items(path), embedder, part_max_chars=part_max_chars, store=store
+            faq_items(path),
+            embedder,
+            part_max_chars=part_max_chars,
+            store=store,
+            reranker=reranker,
         )
 
     def search(
@@ -343,7 +359,11 @@ class KnowledgeBase:
         """Найти фрагменты для промпта, от самого близкого.
 
         Порядок ровно тот, что задан ADR-006: `top_k` кандидатов по близости,
-        затем отсев порогом, затем `top_n` в промпт. Переранжирования между
+        затем переранжирование (если включено, ADR-007), затем отсев порогом,
+        затем `top_n` в промпт. Переранжирование меняет **порядок** внутри
+        `top_k` — оценка, с которой сверяется `threshold`, остаётся косинусной
+        (см. `app/kb/reranker.py`: у кросс-энкодера другая шкала, калиброванного
+        порога для неё нет). По умолчанию реранкера нет — переранжирования между
         ними нет (ADR-014).
 
         **Пустой результат — законный ответ, а не сбой.** Ниже порога контекст
@@ -359,6 +379,8 @@ class KnowledgeBase:
             self._store.search_parts(vector), key=lambda pair: -pair[1]
         )
         candidates = scored[:top_k] if top_k is not None else scored
+        if self._reranker is not None:
+            candidates = self._reranker.rerank(query, candidates)
         return [
             chunk.model_copy(update={"relevance_score": score})
             for chunk, score in candidates[:top_n]

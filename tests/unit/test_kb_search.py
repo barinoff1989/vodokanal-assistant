@@ -146,6 +146,71 @@ def test_пустой_запрос_ничего_не_ищет(tmp_path: Path):
     assert kb.search("   ", top_n=3, threshold=0.0) == []
 
 
+# --- переранжирование (ADR-007, app/kb/reranker.py) ---------------------------- #
+
+
+class FakeReranker:
+    """Разворачивает порядок и запоминает, что ей передали.
+
+    Разворот — не модель качества, а маркер: если после `rerank()` порядок
+    результата совпал бы со входным, тест не отличил бы «реранкер вызван» от
+    «реранкер не вызван». Список входа проверяет, что в пул попал именно
+    `top_k`, а не весь корпус.
+    """
+
+    def __init__(self) -> None:
+        self.seen: list[tuple] = []
+
+    def rerank(self, query: str, candidates):
+        self.seen.append(tuple(chunk.chunk_id for chunk, _ in candidates))
+        return list(reversed(candidates))
+
+
+def test_реранкер_меняет_порядок_но_не_оценку(tmp_path: Path):
+    """Оценка в ответе — исходная косинусная, не оценка кросс-энкодера: у неё
+    нет калиброванного порога (докстринг app/kb/reranker.py)."""
+    table = {
+        "ближний": [1.0, 0.0],
+        "средний": [0.7, 0.7],
+        "запрос": [1.0, 0.0],
+    }
+    path = _corpus_file(tmp_path, [_item("c1", "средний"), _item("c2", "ближний")])
+    reranker = FakeReranker()
+    kb = KnowledgeBase.from_file(path, FakeEmbedder(table), reranker=reranker)
+
+    found = kb.search("запрос", top_n=2, threshold=0.0)
+
+    # Без реранкера порядок был бы c2 (ближе), c1 — FakeReranker его развернул.
+    assert [c.chunk_id for c in found] == ["c1", "c2"]
+    # Но оценка при каждом фрагменте — его собственная косинусная, не переставленная.
+    scores = {c.chunk_id: c.relevance_score for c in found}
+    assert scores["c2"] > scores["c1"]
+
+
+def test_порог_проверяется_по_косинусной_оценке_после_переранжирования(
+    tmp_path: Path,
+):
+    """Реранкер не должен «протащить» фрагмент ниже порога наверх результата."""
+    table = {"ближний": [1.0, 0.0], "дальний": [0.0, 1.0], "запрос": [1.0, 0.0]}
+    path = _corpus_file(tmp_path, [_item("c1", "ближний"), _item("c2", "дальний")])
+    reranker = FakeReranker()
+    kb = KnowledgeBase.from_file(path, FakeEmbedder(table), reranker=reranker)
+
+    found = kb.search("запрос", top_n=2, threshold=0.5)
+
+    assert [c.chunk_id for c in found] == ["c1"]
+
+
+def test_в_пул_переранжирования_попадает_top_k_а_не_весь_корпус(tmp_path: Path):
+    path = _corpus_file(tmp_path, [_item(f"c{n}", "текст") for n in range(5)])
+    reranker = FakeReranker()
+    kb = KnowledgeBase.from_file(path, FakeEmbedder(), reranker=reranker)
+
+    kb.search("запрос", top_n=2, threshold=0.0, top_k=3)
+
+    assert len(reranker.seen[0]) == 3
+
+
 # --- префиксы модели ----------------------------------------------------------- #
 
 
