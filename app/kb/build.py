@@ -158,6 +158,20 @@ def build_knowledge_base(settings: Settings | None = None) -> KnowledgeBase | No
         settings.embedding_model,
         local_files_only=settings.embedding_local_files_only,
     )
+
+    store = None
+    if settings.vector_store == "qdrant":
+        # Ленивый импорт: qdrant-client не должен требоваться, пока хранилище
+        # не выбрано явно (тот же приём, что sentence_transformers в Embedder).
+        from app.kb.qdrant_store import QdrantVectorStore
+
+        store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+        logger.info(
+            "векторное хранилище: Qdrant (%s, коллекция %s)",
+            settings.qdrant_url,
+            settings.qdrant_collection,
+        )
+
     return KnowledgeBase.from_items(
-        items, embedder, part_max_chars=settings.kb_part_max_chars
+        items, embedder, part_max_chars=settings.kb_part_max_chars, store=store
     )

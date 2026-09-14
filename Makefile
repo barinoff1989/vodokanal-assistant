@@ -38,7 +38,7 @@ PIP_SLOW = -m pip install --timeout 120 --retries 10
 # Всё, что импортируется тестами на уровне модуля. Без этого набора `pytest`
 # падает на импорте, а не пропускает проверки.
 install-min:
-	$(PYTHON) $(PIP_SLOW) pytest pytest-asyncio ruff mypy 		pydantic pydantic-settings httpx fastapi sse-starlette 		prometheus-client pyyaml
+	$(PYTHON) $(PIP_SLOW) pytest pytest-asyncio ruff mypy 		pydantic pydantic-settings httpx fastapi sse-starlette 		prometheus-client pyyaml qdrant-client
 
 install: install-min
 	$(PYTHON) $(PIP_SLOW) "."

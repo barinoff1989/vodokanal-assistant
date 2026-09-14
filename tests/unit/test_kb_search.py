@@ -268,7 +268,7 @@ def test_у_фрагмента_столько_векторов_сколько_ч
     # Индекс собирается из двух источников: сначала пары FAQ, затем разделы
     # документов Word. Проверяется первая часть — у неё известно ожидаемое
     # число частей; вторая проверяется в test_kb_documents.py.
-    by_id = {e.chunk.chunk_id: e for e in knowledge_base._entries}
+    by_id = {e.chunk.chunk_id: e for e in knowledge_base._store._entries}
     for item in corpus:
         entry = by_id[item["chunk_id"]]
         parts = split_answer(item["answer"], settings.kb_part_max_chars)

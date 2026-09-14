@@ -28,8 +28,11 @@
 украшение. Отсюда же следует, что менять модель эмбеддингов, не меняя префиксы,
 нельзя.
 
-ХРАНИЛИЩЕ — В ПАМЯТИ, А НЕ QDRANT. Двадцать фрагментов не нуждаются в контейнере
-со своим жизненным циклом; на MVP хранилищем будет Qdrant по ADR-006. Форма
+ХРАНИЛИЩЕ — ЗА ПРОТОКОЛОМ `VectorStore`. По умолчанию — `InMemoryVectorStore`
+(двадцать фрагментов не нуждались в контейнере со своим жизненным циклом), но
+`KnowledgeBase` не знает, память под капотом или Qdrant (`app/kb/qdrant_store.py`,
+`settings.vector_store`) — обе реализации отдают одинаковый контракт:
+по одной паре «фрагмент, лучшая близость среди его частей» на фрагмент. Форма
 запроса от этого не меняется: `top_k` кандидатов по близости, отсев порогом,
 `top_n` в промпт.
 
@@ -57,9 +60,11 @@ __all__ = [
     "PASSAGE_PREFIX",
     "QUERY_PREFIX",
     "Embedder",
+    "InMemoryVectorStore",
     "KbItem",
     "KnowledgeBase",
     "SentenceTransformerEmbedder",
+    "VectorStore",
     "cosine",
     "faq_items",
     "split_answer",
@@ -184,15 +189,59 @@ class _Entry:
         return max(cosine(query, vector) for vector in self.vectors)
 
 
-class KnowledgeBase:
-    """Проиндексированный корпус и поиск по нему."""
+class VectorStore(Protocol):
+    """Куда `KnowledgeBase` кладёт и где ищет векторы фрагментов.
 
-    def __init__(self, entries: Sequence[_Entry], embedder: Embedder) -> None:
-        self._entries = tuple(entries)
-        self._embedder = embedder
+    Единственный контракт: `search_parts` отдаёт **по одной паре на фрагмент**
+    (чанк, лучшая близость среди его частей) — группировка внутри фрагмента
+    (title-вектор vs части ответа) уже сделана реализацией, `KnowledgeBase` её
+    не повторяет. Обе реализации проекта (`InMemoryVectorStore`,
+    `app.kb.qdrant_store.QdrantVectorStore`) держат этот контракт одинаково,
+    поэтому смена хранилища не меняет `KnowledgeBase.search()` ни на строку.
+    """
+
+    def upsert(self, entries: Sequence[_Entry]) -> None:
+        """Добавить фрагменты в хранилище."""
+        ...
+
+    def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
+        """Все фрагменты против вектора запроса, по одной паре на фрагмент."""
+        ...
+
+    def __len__(self) -> int:
+        """Сколько различных фрагментов в хранилище (не векторов-частей)."""
+        ...
+
+
+class InMemoryVectorStore:
+    """Хранилище прототипа — список в памяти процесса (ADR-006, «Отступление прототипа»).
+
+    Оправдано только объёмом: двадцать фрагментов не нуждаются в контейнере со
+    своим жизненным циклом. Живёт, пока жив процесс — ничего не пишется на диск.
+    """
+
+    def __init__(self) -> None:
+        self._entries: list[_Entry] = []
+
+    def upsert(self, entries: Sequence[_Entry]) -> None:
+        self._entries.extend(entries)
+
+    def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
+        return [(entry.chunk, entry.similarity(vector)) for entry in self._entries]
 
     def __len__(self) -> int:
         return len(self._entries)
+
+
+class KnowledgeBase:
+    """Проиндексированный корпус и поиск по нему."""
+
+    def __init__(self, store: VectorStore, embedder: Embedder) -> None:
+        self._store = store
+        self._embedder = embedder
+
+    def __len__(self) -> int:
+        return len(self._store)
 
     @property
     def embedder(self) -> Embedder:
@@ -205,18 +254,20 @@ class KnowledgeBase:
         return self._embedder
 
     @classmethod
-    @classmethod
     def from_items(
         cls,
         items: Sequence[KbItem],
         embedder: Embedder,
         *,
         part_max_chars: int = 300,
+        store: VectorStore | None = None,
     ) -> KnowledgeBase:
         """Проиндексировать готовые записи, откуда бы они ни пришли.
 
         :param items: записи корпуса — пара FAQ либо раздел документа.
         :param part_max_chars: предел длины части тела при разрезании.
+        :param store: куда положить векторы. По умолчанию — `InMemoryVectorStore`;
+            для Qdrant передать `app.kb.qdrant_store.QdrantVectorStore(...)`.
 
         **Один код на два источника, потому что устройство у них одно.** У пары
         FAQ вопрос и ответ; у раздела документа — путь заголовков и текст
@@ -259,15 +310,23 @@ class KnowledgeBase:
             )
             for item, vectors in zip(items, grouped, strict=True)
         ]
-        return cls(entries, embedder)
+        store = store if store is not None else InMemoryVectorStore()
+        store.upsert(entries)
+        return cls(store, embedder)
 
     @classmethod
     def from_file(
-        cls, path: Path, embedder: Embedder, *, part_max_chars: int = 300
+        cls,
+        path: Path,
+        embedder: Embedder,
+        *,
+        part_max_chars: int = 300,
+        store: VectorStore | None = None,
     ) -> KnowledgeBase:
         """Прочитать корпус FAQ и проиндексировать его целиком.
 
         :param part_max_chars: предел длины части ответа при разрезании.
+        :param store: см. `from_items`.
 
         Индексация двадцати фрагментов занимает доли секунды (замер ADR-014: 48
         фрагментов в секунду), поэтому делается при запуске, а не заранее. Когда
@@ -275,7 +334,7 @@ class KnowledgeBase:
         отключений.
         """
         return cls.from_items(
-            faq_items(path), embedder, part_max_chars=part_max_chars
+            faq_items(path), embedder, part_max_chars=part_max_chars, store=store
         )
 
     def search(
@@ -292,18 +351,17 @@ class KnowledgeBase:
         (раздел 8.2): лучше сказать «не знаю», чем дать модели чужой фрагмент и
         получить уверенный вымысел.
         """
-        if not query.strip() or not self._entries:
+        if not query.strip() or len(self._store) == 0:
             return []
 
         (vector,) = self._embedder.encode([QUERY_PREFIX + query])
         scored = sorted(
-            ((entry.similarity(vector), entry) for entry in self._entries),
-            key=lambda pair: -pair[0],
+            self._store.search_parts(vector), key=lambda pair: -pair[1]
         )
-        candidates = scored[: top_k] if top_k is not None else scored
+        candidates = scored[:top_k] if top_k is not None else scored
         return [
-            entry.chunk.model_copy(update={"relevance_score": score})
-            for score, entry in candidates[:top_n]
+            chunk.model_copy(update={"relevance_score": score})
+            for chunk, score in candidates[:top_n]
             if score >= threshold
         ]
 

@@ -135,6 +135,19 @@ class Settings(BaseSettings):
     к сети против 5,3 с из кэша — четырнадцать секунд из сорока шести. Ставить
     `false` имеет смысл только чтобы скачать модель впервые."""
 
+    vector_store: str = "memory"
+    """`memory` | `qdrant` — куда `KnowledgeBase` кладёт и где ищет векторы.
+
+    **memory (по умолчанию)** — `InMemoryVectorStore`, список в процессе; вся
+    база — 20 пар FAQ, контейнер со своим жизненным циклом ради такого объёма
+    не оправдан (ADR-006, «Отступление прототипа»). **qdrant** —
+    `app/kb/qdrant_store.py`, реальный Qdrant (`docker compose`, сервис
+    `qdrant`) — тот же контракт `search()`, меняется только хранилище."""
+
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "kb_faq"
+    """Адрес и коллекция Qdrant. Используются, только если `vector_store="qdrant"`."""
+
     embedding_model: str = "intfloat/multilingual-e5-small"
     """Модель эмбеддингов **прототипа** (ADR-014). На MVP — BGE-M3 по ADR-007.
 
