@@ -14,6 +14,11 @@ set -euo pipefail
 # (`>=3.12,<3.13`) — например, в 3.14. `python3.12` при этом на месте
 # (/usr/bin/python3.12). Строим venv явно на нём, а не полагаемся на PATH.
 echo "=== Виртуальное окружение (python3.12) ==="
+# python3.12 в этом образе идёт без ensurepip (apt-пакет python3-venv не входит
+# в минимальный набор) — без него `python3.12 -m venv` падает молча в середине.
+if ! dpkg -s python3.12-venv >/dev/null 2>&1; then
+  sudo apt-get update -qq && sudo apt-get install -y -qq python3.12-venv
+fi
 if [ ! -d .venv ]; then
   python3.12 -m venv .venv
 fi
