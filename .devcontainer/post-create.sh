@@ -8,6 +8,23 @@
 #   разработчик решает сам, когда тянуть модель (`make model-pull`).
 set -euo pipefail
 
+# В этом образе на PATH одновременно несколько Python (свой у Codespaces —
+# /home/codespace/.python/current, свой у devcontainer-образа, ещё и conda),
+# и голый `python`/`python3` резолвится в версию НЕ из диапазона pyproject.toml
+# (`>=3.12,<3.13`) — например, в 3.14. `python3.12` при этом на месте
+# (/usr/bin/python3.12). Строим venv явно на нём, а не полагаемся на PATH.
+echo "=== Виртуальное окружение (python3.12) ==="
+if [ ! -d .venv ]; then
+  python3.12 -m venv .venv
+fi
+# shellcheck disable=SC1091
+source .venv/bin/activate
+
+# Чтобы venv был активен и в новых терминалах, открытых после этого скрипта
+# (postCreateCommand выполняется один раз, а не при каждом открытии терминала).
+BASHRC_LINE="[ -f \"$(pwd)/.venv/bin/activate\" ] && source \"$(pwd)/.venv/bin/activate\""
+grep -qxF "$BASHRC_LINE" ~/.bashrc 2>/dev/null || echo "$BASHRC_LINE" >>~/.bashrc
+
 echo "=== Зависимости Python (make install) ==="
 make install
 
