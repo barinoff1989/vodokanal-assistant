@@ -3,7 +3,8 @@
 
 <mxCell id="person" value="Абонент" style="rounded=1;arcSize=14;whiteSpace=wrap;html=1;fillColor=#16324F;strokeColor=#0E2233;fontColor=#FFFFFF;fontSize=15;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1"><mxGeometry x="760" y="90" width="220" height="70" as="geometry"/></mxCell>
 
-<mxCell id="cluster" value="Kubernetes-кластер — в закрытом контуре водоканала" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F7FAFD;strokeColor=#2E6DA4;strokeWidth=2;align=left;verticalAlign=top;spacingTop=10;spacingLeft=16;fontSize=15;fontStyle=1;fontColor=#16324F;" parent="1" vertex="1"><mxGeometry x="60" y="200" width="1300" height="880" as="geometry"/></mxCell>
+<mxCell id="clusterlabel" value="Kubernetes-кластер — в закрытом контуре водоканала" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=bottom;fontSize=15;fontStyle=1;fontColor=#16324F;" parent="1" vertex="1"><mxGeometry x="60" y="168" width="700" height="26" as="geometry"/></mxCell>
+<mxCell id="cluster" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F7FAFD;strokeColor=#2E6DA4;strokeWidth=2;" parent="1" vertex="1"><mxGeometry x="60" y="200" width="1300" height="880" as="geometry"/></mxCell>
 
 <mxCell id="lbl_platform" value="namespace: platform" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12.5;fontStyle=1;fontColor=#3A6EA5;" parent="1" vertex="1"><mxGeometry x="100" y="228" width="400" height="22" as="geometry"/></mxCell>
 <mxCell id="ingress" value="Ingress Controller&lt;br&gt;&lt;font style=&#39;font-size:11px;font-weight:normal&#39;&gt;nginx&lt;/font&gt;" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#5B6B7C;strokeColor=#3E4C59;fontColor=#FFFFFF;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1"><mxGeometry x="100" y="254" width="250" height="80" as="geometry"/></mxCell>
