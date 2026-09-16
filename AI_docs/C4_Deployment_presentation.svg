@@ -1,0 +1,81 @@
+<svg viewBox="0 0 1600 960" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A6B7B"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="960" fill="#FFFFFF"/>
+
+  <text x="800" y="52" text-anchor="middle" font-size="26" font-weight="700" fill="#16324F">Где и как развёрнута система (MVP)</text>
+
+  <!-- cluster boundary -->
+  <rect x="80" y="230" width="1000" height="560" rx="6" fill="#F4F8FC" stroke="#2E6DA4" stroke-width="2"/>
+  <text x="100" y="256" font-size="15" font-weight="700" fill="#16324F">Kubernetes-кластер — в закрытом контуре водоканала</text>
+
+  <!-- edges -->
+  <path d="M 190,180 L 190,230" stroke="#5A6B7B" stroke-width="2" fill="none" marker-end="url(#arrow3)"/>
+  <path d="M 550,370 L 610,370" stroke="#5A6B7B" stroke-width="2" fill="none" marker-end="url(#arrow3)"/>
+  <path d="M 340,450 L 340,500" stroke="#5A6B7B" stroke-width="2" fill="none" marker-end="url(#arrow3)"/>
+
+  <path d="M 550,338 L 1160,350" stroke="#5A6B7B" stroke-width="2" fill="none" marker-end="url(#arrow3)"/>
+  <rect x="850" y="320" width="130" height="20" fill="#FFFFFF"/>
+  <text x="915" y="335" text-anchor="middle" font-size="12.5" fill="#333333">генерация ответа</text>
+
+  <path d="M 1340,410 L 1340,450" stroke="#5A6B7B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow3)"/>
+  <rect x="1290" y="418" width="90" height="20" fill="#FFFFFF"/>
+  <text x="1335" y="433" text-anchor="middle" font-size="12.5" fill="#333333">по триггеру</text>
+
+  <path d="M 550,406 L 1090,406 L 1090,695 L 1160,695" stroke="#5A6B7B" stroke-width="2" fill="none" marker-end="url(#arrow3)"/>
+  <rect x="900" y="680" width="240" height="20" fill="#FFFFFF"/>
+  <text x="1020" y="695" text-anchor="middle" font-size="12.5" fill="#333333">чтение / запись после подтверждения</text>
+
+  <!-- Абонент -->
+  <rect x="80" y="100" width="220" height="80" rx="14" fill="#16324F" stroke="#0E2233" stroke-width="1.5"/>
+  <text x="190" y="147" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">Абонент</text>
+
+  <!-- Приложение -->
+  <rect x="130" y="290" width="420" height="160" rx="10" fill="#2F80C3" stroke="#1F5C8B" stroke-width="1.5"/>
+  <text x="340" y="360" text-anchor="middle" font-size="17" font-weight="700" fill="#FFFFFF">Приложение</text>
+  <text x="340" y="385" text-anchor="middle" font-size="12.5" fill="#E8F0FA">веб-виджет, обработка вопроса,</text>
+  <text x="340" y="402" text-anchor="middle" font-size="12.5" fill="#E8F0FA">защита данных, лимиты</text>
+
+  <!-- Поиск и индексация -->
+  <rect x="610" y="290" width="420" height="160" rx="10" fill="#D99C00" stroke="#A67C00" stroke-width="1.5"/>
+  <text x="820" y="365" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">Поиск и индексация</text>
+  <text x="820" y="390" text-anchor="middle" font-size="12.5" fill="#FCEFD2">эмбеддинги, переранжирование (GPU)</text>
+
+  <!-- Хранилища -->
+  <rect x="130" y="500" width="420" height="150" rx="10" fill="#5B6B7C" stroke="#3E4C59" stroke-width="1.5"/>
+  <text x="340" y="572" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">Хранилища</text>
+  <text x="340" y="596" text-anchor="middle" font-size="12.5" fill="#DDE3E8">сессии, база знаний, телеметрия</text>
+
+  <!-- Наблюдаемость -->
+  <rect x="610" y="500" width="420" height="150" rx="10" fill="#5B6B7C" stroke="#3E4C59" stroke-width="1.5"/>
+  <text x="820" y="572" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">Наблюдаемость</text>
+  <text x="820" y="596" text-anchor="middle" font-size="12.5" fill="#DDE3E8">метрики, логи, алерты</text>
+
+  <!-- LLM Provider -->
+  <rect x="1160" y="290" width="360" height="120" rx="10" fill="#9E9E9E" stroke="#757575" stroke-width="1.5"/>
+  <text x="1340" y="345" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">LLM Provider</text>
+  <text x="1340" y="368" text-anchor="middle" font-size="12.5" fill="#F0F0F0">GigaChat / YandexGPT</text>
+
+  <!-- Тираж -->
+  <rect x="1160" y="450" width="360" height="140" rx="10" fill="#F4F8FC" stroke="#5B8DB8" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="1340" y="500" text-anchor="middle" font-size="16" font-weight="700" fill="#16324F">Своя модель (тираж)</text>
+  <text x="1340" y="524" text-anchor="middle" font-size="12" fill="#3A5A78">включается по триггеру — рост нагрузки</text>
+  <text x="1340" y="541" text-anchor="middle" font-size="12" fill="#3A5A78">или требование безопасности</text>
+
+  <!-- Системы водоканала -->
+  <rect x="1160" y="630" width="360" height="130" rx="10" fill="#9E9E9E" stroke="#757575" stroke-width="1.5"/>
+  <text x="1340" y="685" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">Системы водоканала</text>
+  <text x="1340" y="708" text-anchor="middle" font-size="12" fill="#F0F0F0">Биллинг, Диспетчерская, обращения,</text>
+  <text x="1340" y="724" text-anchor="middle" font-size="12" fill="#F0F0F0">личный кабинет</text>
+
+  <!-- Легенда -->
+  <rect x="80" y="850" width="28" height="16" rx="3" fill="#2F80C3" stroke="#1F5C8B"/>
+  <text x="118" y="863" font-size="13.5" fill="#333333">работает сейчас</text>
+
+  <rect x="320" y="850" width="28" height="16" rx="3" fill="#F4F8FC" stroke="#5B8DB8" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="358" y="863" font-size="13.5" fill="#333333">по триггеру / в разработке</text>
+</svg>
