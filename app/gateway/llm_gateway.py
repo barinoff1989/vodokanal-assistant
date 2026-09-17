@@ -547,6 +547,14 @@ class LlmGateway:
 
         guard = StreamGuard(guardrails=self._guardrails)
         blocked = False
+        emitted_any = False
+        """Хоть один кусок уже ушёл абоненту до срабатывания охранителя.
+
+        Заглушка (`SAFE_FALLBACK`) приходит отдельным куском и приклеивается
+        клиентом к уже показанному тексту без разделителя (`node.textContent
+        +=`, `web/app.js`) — «…через Л» + «Не могу показать этот ответ»
+        слипались в одно слово. Кусков ноль — заглушка сама открывает ответ,
+        разделитель не нужен и только оставил бы висящую пустую строку."""
         first_delta_at: float | None = None
         answering_model = ""
         usage = Usage()
@@ -572,11 +580,15 @@ class LlmGateway:
             if not verdict.allowed:
                 # Охранитель сработал: наружу уходит заглушка вместо остатка
                 # ответа. Уже отданные куски отозвать нельзя, поэтому проверка
-                # стоит до выдачи, а не после.
+                # стоит до выдачи, а не после. Заглушка начинается с новой
+                # строки, если абонент уже что-то увидел (см. docstring
+                # emitted_any) — иначе клеится встык с последним куском.
                 blocked = True
-                yield TokenEvent(delta=verdict.text_for_subscriber or "")
+                fallback = verdict.text_for_subscriber or ""
+                yield TokenEvent(delta=("\n\n" + fallback) if emitted_any else fallback)
                 break
             yield TokenEvent(delta=delta)
+            emitted_any = True
 
         if answering_model:
             metrics.record_provider_used(

@@ -146,9 +146,20 @@ async def test_поток_обрывается_на_нарушении():
     pieces = ["Ваш лицевой ", "счёт 1234567890", " — задолженность 900 рублей"]
     got = [chunk async for chunk in guard.filter(_as_stream(pieces))]
 
-    assert got[-1] == SAFE_FALLBACK
+    # Первый кусок уже дошёл до абонента ("Ваш лицевой "), поэтому заглушка
+    # начинается с новой строки — иначе она слипается с ним без пробела.
+    assert got[-1] == "\n\n" + SAFE_FALLBACK
     assert "1234567890" not in "".join(got)
     assert guard.verdict.reason is BlockReason.PII_LEAK
+
+
+async def test_заглушка_без_разделителя_если_ничего_не_показано():
+    """Нарушение на первом же куске — заглушке не с чем слипаться."""
+    guard = StreamGuard(guardrails=SyncGuardrails(sanitizer=PiiSanitizer(analyzer=None)))
+    pieces = ["л/с 1234567890 — вот его данные"]
+    got = [chunk async for chunk in guard.filter(_as_stream(pieces))]
+
+    assert got == [SAFE_FALLBACK]
 
 
 async def test_остаток_потока_не_выдаётся_после_обрыва():
