@@ -66,11 +66,13 @@ class QdrantVectorStore:
 
     :param url: адрес Qdrant (`http://localhost:6333`) либо `:memory:` —
         встроенный режим `qdrant-client` без сервера, для тестов.
-    :param collection: имя коллекции. Пересобирается заново при каждом
-        `upsert` из пустого состояния на прототипе (`build_knowledge_base`
-        вызывается при каждом старте) — отдельное имя на окружение убережёт от
+    :param collection: имя коллекции. Отдельное имя на окружение убережёт от
         путаницы, если несколько процессов используют одну и ту же Qdrant.
-    """
+
+    Два способа наполнить `_point_count`/`_chunk_ids`, которыми живут
+    `search_parts`/`__len__`: `upsert` (пишущая сторона, `scripts/reindex_kb.py`)
+    и `attach` (читающая сторона, `build_knowledge_base(reindex=False)`,
+    боевой путь Backend при `VECTOR_STORE=qdrant`) — см. докстринг `attach`."""
 
     def __init__(self, url: str, collection: str) -> None:
         self._url = url
@@ -126,6 +128,44 @@ class QdrantVectorStore:
         client.upsert(self._collection, points=points)
         self._point_count += len(points)
         self._chunk_ids.update(entry.chunk.chunk_id for entry in entries)
+
+    def attach(self) -> int:
+        """Открыть уже наполненную коллекцию для поиска, не переиндексируя.
+
+        `upsert` — единственное место, где раньше заполнялись `_point_count` и
+        `_chunk_ids`; для процесса, который сам ничего не писал (Backend при
+        `build_knowledge_base(reindex=False)` — переиндексация ушла в отдельный
+        прогон, `scripts/reindex_kb.py`), они остались бы нулевыми, и
+        `search_parts`/`KnowledgeBase.search` решили бы, что хранилище пусто,
+        хотя в Qdrant уже есть данные. `attach` читает реальное состояние
+        коллекции вместо того, чтобы полагаться на историю вызовов `upsert`
+        в этом процессе.
+
+        Возвращает число фрагментов (не точек) — то же, что покажет `len()`
+        после вызова. Коллекции ещё нет — `0`, это не ошибка: `reindex_kb.py`
+        просто не запускали ни разу.
+        """
+        client = self._ensure_client()
+        if not client.collection_exists(self._collection):
+            return 0
+
+        chunk_ids: set[str] = set()
+        offset = None
+        while True:
+            points, offset = client.scroll(
+                self._collection, with_payload=["chunk_id"], with_vectors=False,
+                limit=256, offset=offset,
+            )
+            chunk_ids.update(
+                point.payload["chunk_id"] for point in points if point.payload
+            )
+            if offset is None:
+                break
+
+        info = client.get_collection(self._collection)
+        self._point_count = info.points_count or 0
+        self._chunk_ids = chunk_ids
+        return len(self._chunk_ids)
 
     def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
         if self._point_count == 0:

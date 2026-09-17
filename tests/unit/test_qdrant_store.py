@@ -139,3 +139,51 @@ def test_пустое_хранилище_ничего_не_находит():
     store = _store("empty-store")
     assert store.search_parts([1.0, 0.0]) == []
     assert len(store) == 0
+
+
+# --- attach: открыть коллекцию, не переиндексируя (build_knowledge_base) ------- #
+
+
+def test_attach_на_несуществующую_коллекцию_возвращает_ноль():
+    """`reindex_kb.py` ни разу не запускали — это не ошибка, а пустая база."""
+    store = _store("attach-missing")
+    assert store.attach() == 0
+    assert len(store) == 0
+    assert store.search_parts([1.0, 0.0]) == []
+
+
+def test_attach_видит_данные_чужого_upsert():
+    """Тот же сценарий, что Backend/`build_knowledge_base(reindex=False)`:
+    `attach` вызывается в процессе, который сам ничего не писал — данные в
+    Qdrant появились другим прогоном (`scripts/reindex_kb.py`). `:memory:`
+    Qdrant изолирован по клиенту, а не по процессу, поэтому второй стор
+    получает клиент первого напрямую — так же, как если бы это был общий
+    Qdrant по сети (`http://localhost:6333`), только без реального сервера.
+    """
+    writer = _store("attach-shared")
+    writer.upsert(
+        [
+            _Entry(
+                chunk=ContextChunk(
+                    chunk_id="c1", text="t1", source_title="s", source_url="u",
+                    relevance_score=0.0,
+                ),
+                vectors=([1.0, 0.0],),
+            ),
+            _Entry(
+                chunk=ContextChunk(
+                    chunk_id="c2", text="t2", source_title="s", source_url="u",
+                    relevance_score=0.0,
+                ),
+                vectors=([0.0, 1.0], [0.9, 0.1]),
+            ),
+        ]
+    )
+
+    reader = _store("attach-shared")
+    reader._client = writer._client  # тот же приём, что использовал бы общий сервер
+
+    assert reader.attach() == 2
+    assert len(reader) == 2
+    found = reader.search_parts([1.0, 0.0])
+    assert {chunk.chunk_id for chunk, _ in found} == {"c1", "c2"}

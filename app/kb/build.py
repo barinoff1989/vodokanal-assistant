@@ -132,14 +132,72 @@ def collect_items(settings: Settings | None = None) -> list[KbItem]:
     return items
 
 
-def build_knowledge_base(settings: Settings | None = None) -> KnowledgeBase | None:
-    """Проиндексировать корпус, если он на месте.
+def build_knowledge_base(
+    settings: Settings | None = None, *, reindex: bool = True
+) -> KnowledgeBase | None:
+    """Проиндексировать корпус — либо открыть уже готовый индекс в Qdrant.
 
-    Отсутствие корпуса — не отказ подняться: поиск выключается, модель отвечает
-    без опоры на регламенты. На прототипе это допустимо и заметно по журналу; на
-    MVP так работать нельзя, и там пустая база знаний должна ронять запуск.
+    Отсутствие корпуса (или пустая коллекция Qdrant) — не отказ подняться: поиск
+    выключается, модель отвечает без опоры на регламенты. На прототипе это
+    допустимо и заметно по журналу; на MVP так работать нельзя, и там пустая
+    база знаний должна ронять запуск.
+
+    :param reindex: пересобрать корпус и загрузить его в хранилище заново.
+        По умолчанию — да, и для `memory` это единственный осмысленный режим:
+        хранилище живёт только в этом процессе, открыть чужой индекс негде.
+        Для `qdrant` можно поставить `False` — тогда Backend лишь открывает
+        уже наполненную коллекцию (`QdrantVectorStore.attach`) вместо того,
+        чтобы на каждом рестарте заново считать эмбеддинги всего корпуса
+        (минуты на CPU без ускорителя). Пересборку данных в этом режиме
+        делает отдельный прогон — `python scripts/reindex_kb.py` — так
+        целевая архитектура и разносит это на ETL Worker и читающий Backend
+        (раздел 5.5 контекста), просто без своего планировщика задач: на
+        объёме прототипа он не нужен, запускается вручную, когда меняется
+        корпус.
     """
     settings = settings or get_settings()
+
+    embedder = SentenceTransformerEmbedder(
+        settings.embedding_model,
+        local_files_only=settings.embedding_local_files_only,
+    )
+
+    reranker = None
+    if settings.reranker_enabled:
+        # Ленивый импорт: та же причина, что у qdrant-client ниже —
+        # пакет не должен требоваться, пока опция не выбрана явно.
+        from app.kb.reranker import CrossEncoderReranker
+
+        reranker = CrossEncoderReranker(
+            settings.reranker_model, local_files_only=settings.embedding_local_files_only
+        )
+        # Индексация прогревает Embedder сама (encode() вызывается прямо
+        # сейчас, при сборке корпуса) — у реранкера такого триггера нет, и
+        # без явного прогрева загрузка спряталась бы в первый запрос абонента
+        # (та же ошибка, что уже находили четыре раза, см. docstring reranker.py).
+        reranker.warm_up()
+        logger.info("переранжирование: включено (%s)", settings.reranker_model)
+
+    if settings.vector_store == "qdrant" and not reindex:
+        from app.kb.qdrant_store import QdrantVectorStore
+
+        attached_store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+        count = attached_store.attach()
+        if count == 0:
+            logger.warning(
+                "коллекция Qdrant %r пуста или не создана (%s): поиск выключен, "
+                "пока не выполнен `python scripts/reindex_kb.py`",
+                settings.qdrant_collection,
+                settings.qdrant_url,
+            )
+            return None
+        logger.info(
+            "база знаний: открыта коллекция Qdrant %r, %d фрагментов",
+            settings.qdrant_collection,
+            count,
+        )
+        return KnowledgeBase(attached_store, embedder, reranker)
+
     items = collect_items(settings)
     if not items:
         logger.warning(
@@ -154,11 +212,6 @@ def build_knowledge_base(settings: Settings | None = None) -> KnowledgeBase | No
         "база знаний: %d фрагментов, синтетических %d", len(items), synthetic
     )
 
-    embedder = SentenceTransformerEmbedder(
-        settings.embedding_model,
-        local_files_only=settings.embedding_local_files_only,
-    )
-
     store = None
     if settings.vector_store == "qdrant":
         # Ленивый импорт: qdrant-client не должен требоваться, пока хранилище
@@ -171,21 +224,6 @@ def build_knowledge_base(settings: Settings | None = None) -> KnowledgeBase | No
             settings.qdrant_url,
             settings.qdrant_collection,
         )
-
-    reranker = None
-    if settings.reranker_enabled:
-        # Ленивый импорт: та же причина, что у qdrant-client выше.
-        from app.kb.reranker import CrossEncoderReranker
-
-        reranker = CrossEncoderReranker(
-            settings.reranker_model, local_files_only=settings.embedding_local_files_only
-        )
-        # Индексация прогревает Embedder сама (encode() вызывается прямо
-        # сейчас, при сборке корпуса) — у реранкера такого триггера нет, и
-        # без явного прогрева загрузка спряталась бы в первый запрос абонента
-        # (та же ошибка, что уже находили четыре раза, см. docstring reranker.py).
-        reranker.warm_up()
-        logger.info("переранжирование: включено (%s)", settings.reranker_model)
 
     return KnowledgeBase.from_items(
         items,

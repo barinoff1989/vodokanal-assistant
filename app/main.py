@@ -321,7 +321,14 @@ def create() -> object:
         )
 
     with _stage("база знаний: модель эмбеддингов и индексация"):
-        knowledge_base = build_knowledge_base()
+        # Qdrant — Backend только читает уже наполненную коллекцию
+        # (`scripts/reindex_kb.py` наполняет её отдельным прогоном), не считает
+        # эмбеддинги всего корпуса заново на каждом рестарте. `memory` не
+        # переживает рестарт сама по себе, поэтому там reindex остаётся
+        # обязательным — `build_knowledge_base` это учитывает сам.
+        knowledge_base = build_knowledge_base(
+            settings, reindex=settings.vector_store != "qdrant"
+        )
 
     # Запасные классификаторы (тема и тип обращения) переиспользуют уже
     # поднятую модель эмбеддингов базы знаний — вторая копия весов не
