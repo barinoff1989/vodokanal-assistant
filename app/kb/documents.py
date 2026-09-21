@@ -37,6 +37,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.taxonomy import InquiryType
+
 __all__ = ["DocumentSection", "SYNTHETIC_CATEGORY", "load_docx", "load_directory"]
 
 SYNTHETIC_CATEGORY = "СИНТЕТИКА"
@@ -74,6 +76,9 @@ class DocumentSection:
     :param source_title: название документа.
     :param source_path: путь файла — на MVP заменится адресом в хранилище.
     :param synthetic: собран ли документ генератором.
+    :param inquiry_type: тип обращения, к которому относится документ
+        (значение `InquiryType`), из свойства файла `subject`; ``None`` —
+        документ общий (регламент, инструкция) и подходит под любой тип.
     """
 
     chunk_id: str
@@ -82,6 +87,7 @@ class DocumentSection:
     source_title: str
     source_path: str
     synthetic: bool
+    inquiry_type: str | None = None
 
 
 def _table_lines(table: object) -> list[str]:
@@ -159,6 +165,11 @@ def load_docx(path: Path) -> list[DocumentSection]:
     properties = document.core_properties
     title = (properties.title or path.stem).strip()
     synthetic = (properties.category or "").strip() == SYNTHETIC_CATEGORY
+    # Тип — свойство файла, а не догадка по тексту: тот же довод, что у пометки
+    # синтетичности выше. Неизвестное значение — не тип: фильтровать по
+    # опечатке значило бы молча потерять документ из поиска.
+    subject = (properties.subject or "").strip()
+    inquiry_type = subject if subject in {t.value for t in InquiryType} else None
 
     levels = _heading_levels(document)
     sections: list[DocumentSection] = []
@@ -178,6 +189,7 @@ def load_docx(path: Path) -> list[DocumentSection]:
                     source_title=title,
                     source_path=str(path),
                     synthetic=synthetic,
+                    inquiry_type=inquiry_type,
                 )
             )
         current = []

@@ -122,6 +122,7 @@ def collect_items(settings: Settings | None = None) -> list[KbItem]:
             source_title=section.source_title,
             source_url=None,
             synthetic=section.synthetic,
+            inquiry_type=section.inquiry_type,
         )
         for section in sections
     )

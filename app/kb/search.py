@@ -147,6 +147,8 @@ class KbItem:
     :param title: то, что говорит, о чём текст: вопрос FAQ либо путь заголовков.
     :param body: сам текст.
     :param synthetic: собрана ли запись генератором, а не пришла от владельца.
+    :param inquiry_type: значение `InquiryType`, к которому относится запись;
+        ``None`` — общая запись, подходит под любой тип (ADR-006, правило 4.8).
     """
 
     chunk_id: str
@@ -155,6 +157,7 @@ class KbItem:
     source_title: str
     source_url: str | None = None
     synthetic: bool = False
+    inquiry_type: str | None = None
 
 
 def faq_items(path: Path) -> list[KbItem]:
@@ -182,6 +185,7 @@ class _Entry:
 
     chunk: ContextChunk
     vectors: tuple[Sequence[float], ...]
+    inquiry_type: str | None = None
 
     def similarity(self, query: Sequence[float]) -> float:
         """Лучшая близость среди частей.
@@ -317,6 +321,7 @@ class KnowledgeBase:
                     relevance_score=0.0,
                 ),
                 vectors=tuple(vectors),
+                inquiry_type=item.inquiry_type,
             )
             for item, vectors in zip(items, grouped, strict=True)
         ]

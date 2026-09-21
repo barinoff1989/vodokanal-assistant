@@ -122,6 +122,8 @@ class Document:
     title: str
     subtitle: str
     sections: tuple[Section, ...] = field(default=())
+    inquiry_type: str | None = None
+    """Значение `InquiryType` для реестра договоров; у регламентов — ``None``."""
 
 
 def build_documents() -> list[Document]:
@@ -324,6 +326,7 @@ def build_documents() -> list[Document]:
                 path=f"contracts/{inquiry_type}.docx",
                 title=f"Порядок работы по обращению «{name}»",
                 subtitle="Реестр договоров и типовых условий. Редакция 1",
+                inquiry_type=inquiry_type,
                 sections=(
                     Section(
                         "1. Когда применяется",
@@ -474,6 +477,8 @@ def write_document(spec: Document, root: Path) -> Path:
     properties.category = "СИНТЕТИКА"
     properties.comments = SYNTHETIC_MARK
     properties.author = "scripts/generate_kb_docs.py"
+    if spec.inquiry_type:
+        properties.subject = spec.inquiry_type
 
     path = root / spec.path
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -128,3 +128,43 @@ def test_несинтетический_документ_помечен_не_б�
     assert sections
     assert not any(s.synthetic for s in sections)
     assert SYNTHETIC_CATEGORY not in (sections[0].source_title or "")
+
+
+# --- тип обращения документа (payload-фильтр, ADR-006) --------------------------- #
+
+
+def _doc_with_subject(tmp_path: Path, subject: str | None) -> Path:
+    from docx import Document
+
+    document = Document()
+    document.add_heading("Порядок работы", level=0)
+    document.add_heading("1. Раздел", level=1)
+    document.add_paragraph("Текст раздела.")
+    if subject is not None:
+        document.core_properties.subject = subject
+    path = tmp_path / "doc.docx"
+    document.save(str(path))
+    return path
+
+
+def test_тип_обращения_читается_из_свойства_файла(tmp_path: Path):
+    sections = load_docx(_doc_with_subject(tmp_path, "meter_sealing"))
+    assert {s.inquiry_type for s in sections} == {"meter_sealing"}
+
+
+def test_документ_без_типа_общий(tmp_path: Path):
+    assert {s.inquiry_type for s in load_docx(_doc_with_subject(tmp_path, None))} == {None}
+
+
+def test_неизвестный_тип_не_становится_типом(tmp_path: Path):
+    """Опечатка в свойстве не должна молча выпадать из поиска по типу."""
+    sections = load_docx(_doc_with_subject(tmp_path, "meter_sealling"))
+    assert {s.inquiry_type for s in sections} == {None}
+
+
+def test_реестр_договоров_размечен_регламенты_общие(documents: Path):
+    by_file: dict[str, set[str | None]] = {}
+    for s in load_directory(documents):
+        by_file.setdefault(Path(s.source_path).stem, set()).add(s.inquiry_type)
+    assert by_file["meter_verification"] == {"meter_verification"}
+    assert by_file["instrukciya-nachisleniya"] == {None}
