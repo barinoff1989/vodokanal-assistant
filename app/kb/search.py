@@ -211,8 +211,16 @@ class VectorStore(Protocol):
         """Добавить фрагменты в хранилище."""
         ...
 
-    def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
-        """Все фрагменты против вектора запроса, по одной паре на фрагмент."""
+    def search_parts(
+        self, vector: Sequence[float], inquiry_type: str | None = None
+    ) -> list[tuple[ContextChunk, float]]:
+        """Все фрагменты против вектора запроса, по одной паре на фрагмент.
+
+        `inquiry_type` — фильтр, который участвует **в самом поиске**, а не
+        применяется к готовой выдаче (ADR-006): из кандидатов исключаются
+        фрагменты чужого типа. Фрагменты без типа (общие регламенты) подходят
+        под любой. ``None`` — без фильтра.
+        """
         ...
 
     def __len__(self) -> int:
@@ -233,8 +241,16 @@ class InMemoryVectorStore:
     def upsert(self, entries: Sequence[_Entry]) -> None:
         self._entries.extend(entries)
 
-    def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
-        return [(entry.chunk, entry.similarity(vector)) for entry in self._entries]
+    def search_parts(
+        self, vector: Sequence[float], inquiry_type: str | None = None
+    ) -> list[tuple[ContextChunk, float]]:
+        return [
+            (entry.chunk, entry.similarity(vector))
+            for entry in self._entries
+            if inquiry_type is None
+            or entry.inquiry_type is None
+            or entry.inquiry_type == inquiry_type
+        ]
 
     def __len__(self) -> int:
         return len(self._entries)
@@ -359,7 +375,13 @@ class KnowledgeBase:
         )
 
     def search(
-        self, query: str, *, top_n: int, threshold: float, top_k: int | None = None
+        self,
+        query: str,
+        *,
+        top_n: int,
+        threshold: float,
+        top_k: int | None = None,
+        inquiry_type: str | None = None,
     ) -> list[ContextChunk]:
         """Найти фрагменты для промпта, от самого близкого.
 
@@ -371,6 +393,11 @@ class KnowledgeBase:
         порога для неё нет). По умолчанию реранкера нет — переранжирования между
         ними нет (ADR-014).
 
+        **Фильтр `inquiry_type` — внутри поиска** (ADR-006): чужой тип
+        исключается до отбора `top_k`, а не после — иначе нужный фрагмент мог
+        бы не попасть в двадцать кандидатов из-за соседей другого типа. Общие
+        фрагменты (без типа) проходят любой фильтр.
+
         **Пустой результат — законный ответ, а не сбой.** Ниже порога контекст
         считается не найденным, и включается запасной путь без модели
         (раздел 8.2): лучше сказать «не знаю», чем дать модели чужой фрагмент и
@@ -381,7 +408,7 @@ class KnowledgeBase:
 
         (vector,) = self._embedder.encode([QUERY_PREFIX + query])
         scored = sorted(
-            self._store.search_parts(vector), key=lambda pair: -pair[1]
+            self._store.search_parts(vector, inquiry_type), key=lambda pair: -pair[1]
         )
         candidates = scored[:top_k] if top_k is not None else scored
         if self._reranker is not None:

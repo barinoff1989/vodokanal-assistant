@@ -16,11 +16,14 @@ BLUE-GREEN (`blue_green=True`, `publish()`): переиндексация пиш
 алиас переключается одной атомарной операцией. Без флага `upsert` пишет
 прямо в коллекцию (оверрайт на месте, как раньше).
 
-ЧЕГО ЗДЕСЬ НЕТ — ОСОЗНАННО, ЭТО НЕ ВЕСЬ ADR-006. Payload-фильтр по
-`inquiry_type` не создаётся (нечем фильтровать — таксономия документов не
-размечена); проверка несовпадения версии модели эмбеддингов с алертом
-(ADR-006, п. 7 подтверждения) не написана. Каждое — отдельная задача
-дорожной карты (ADR-021), не забытая часть этой.
+ФИЛЬТР ПО `inquiry_type` — внутри запроса (`query_filter`), не над выдачей:
+тип совпал или у фрагмента типа нет (общий регламент). Payload-индексы
+созданы по `inquiry_type` и `source_title` — по остальным полям ADR-006
+(`department`, `effective_date`) данных в корпусе пока нет.
+
+ЧЕГО ЗДЕСЬ НЕТ — ОСОЗНАННО, ЭТО НЕ ВЕСЬ ADR-006. Проверка несовпадения
+версии модели эмбеддингов с алертом (ADR-006, п. 7 подтверждения) не написана —
+отдельная задача дорожной карты (ADR-021), не забытая часть этой.
 
 `qdrant-client` импортируется лениво (как `sentence_transformers` в
 `SentenceTransformerEmbedder`) — модуль не должен требовать пакет, если Qdrant
@@ -115,7 +118,13 @@ class QdrantVectorStore:
         return self._client
 
     def upsert(self, entries: Sequence[_Entry]) -> None:
-        from qdrant_client.models import Distance, HnswConfigDiff, PointStruct, VectorParams
+        from qdrant_client.models import (
+            Distance,
+            HnswConfigDiff,
+            PayloadSchemaType,
+            PointStruct,
+            VectorParams,
+        )
 
         client = self._ensure_client()
         points = [
@@ -128,6 +137,9 @@ class QdrantVectorStore:
                     "source_title": entry.chunk.source_title,
                     "source_url": entry.chunk.source_url,
                     "synthetic": entry.chunk.synthetic,
+                    # Общий фрагмент (без типа) не пишется в payload вовсе:
+                    # `IsEmptyCondition` в фильтре ловит и отсутствующее поле.
+                    **({"inquiry_type": entry.inquiry_type} if entry.inquiry_type else {}),
                 },
             )
             for entry in entries
@@ -147,6 +159,19 @@ class QdrantVectorStore:
                 # m/ef — параметры ADR-006 (раздел 8.2), не выдумка модуля.
                 hnsw_config=HnswConfigDiff(m=16, ef_construct=128),
             )
+            # Индексы payload (ADR-006, раздел 8.2): без них фильтр — проход
+            # по всем точкам. Только поля, по которым есть данные: `department`
+            # и `effective_date` корпус пока не несёт, и индекс по пустому полю
+            # ничего не ускоряет.
+            # Встроенный режим (`:memory:`) индексов payload не поддерживает —
+            # там это было бы предупреждение без эффекта.
+            if self._url != ":memory:":
+                for field_name in ("inquiry_type", "source_title"):
+                    client.create_payload_index(
+                        target,
+                        field_name=field_name,
+                        field_schema=PayloadSchemaType.KEYWORD,
+                    )
 
         client.upsert(target, points=points)
         self._point_count += len(points)
@@ -246,14 +271,39 @@ class QdrantVectorStore:
         self._chunk_ids = chunk_ids
         return len(self._chunk_ids)
 
-    def search_parts(self, vector: Sequence[float]) -> list[tuple[ContextChunk, float]]:
+    def search_parts(
+        self, vector: Sequence[float], inquiry_type: str | None = None
+    ) -> list[tuple[ContextChunk, float]]:
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            IsEmptyCondition,
+            MatchValue,
+            PayloadField,
+        )
+
         if self._point_count == 0:
             return []
         client = self._ensure_client()
+        # Фильтр — внутри запроса, а не над готовой выдачей (ADR-006): тип
+        # совпал ИЛИ у фрагмента типа нет (общий регламент подходит под любой).
+        query_filter = (
+            Filter(
+                should=[
+                    FieldCondition(key="inquiry_type", match=MatchValue(value=inquiry_type)),
+                    IsEmptyCondition(is_empty=PayloadField(key="inquiry_type")),
+                ]
+            )
+            if inquiry_type is not None
+            else None
+        )
         # Лимит — все точки коллекции: на объёме прототипа это точный перебор,
         # не приближение (см. докстринг модуля).
         result = client.query_points(
-            self._collection, query=list(vector), limit=self._point_count
+            self._collection,
+            query=list(vector),
+            query_filter=query_filter,
+            limit=self._point_count,
         )
 
         best: dict[str, tuple[ContextChunk, float]] = {}
