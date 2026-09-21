@@ -218,17 +218,25 @@ def build_knowledge_base(
         # не выбрано явно (тот же приём, что sentence_transformers в Embedder).
         from app.kb.qdrant_store import QdrantVectorStore
 
-        store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+        # blue-green: пишем в новую версию коллекции, алиас переключается
+        # только после полной загрузки — поиск по нему не видит недособранного.
+        store = QdrantVectorStore(
+            settings.qdrant_url, settings.qdrant_collection, blue_green=True
+        )
         logger.info(
-            "векторное хранилище: Qdrant (%s, коллекция %s)",
+            "векторное хранилище: Qdrant (%s, алиас %s)",
             settings.qdrant_url,
             settings.qdrant_collection,
         )
 
-    return KnowledgeBase.from_items(
+    knowledge_base = KnowledgeBase.from_items(
         items,
         embedder,
         part_max_chars=settings.kb_part_max_chars,
         store=store,
         reranker=reranker,
     )
+    if store is not None:
+        published = store.publish()
+        logger.info("алиас %s -> %s", settings.qdrant_collection, published)
+    return knowledge_base

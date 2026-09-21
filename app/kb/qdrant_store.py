@@ -11,13 +11,16 @@
 HNSW-графа, а полный перебор через Qdrant — то же самое, что раньше делал
 Python-цикл, просто по сети.
 
+BLUE-GREEN (`blue_green=True`, `publish()`): переиндексация пишет в новую
+версию коллекции, читатели ищут по алиасу и не видят недособранного корпуса;
+алиас переключается одной атомарной операцией. Без флага `upsert` пишет
+прямо в коллекцию (оверрайт на месте, как раньше).
+
 ЧЕГО ЗДЕСЬ НЕТ — ОСОЗНАННО, ЭТО НЕ ВЕСЬ ADR-006. Payload-фильтр по
 `inquiry_type` не создаётся (нечем фильтровать — таксономия документов не
-размечена); blue-green переключение alias при реиндексе не реализовано
-(переиндексация здесь — `upsert` тех же ID, оверрайт на месте); проверка
-несовпадения версии модели эмбеддингов с алертом (ADR-006, п. 7 подтверждения)
-не написана. Каждое — отдельная задача дорожной карты (ADR-021), не забытая
-часть этой.
+размечена); проверка несовпадения версии модели эмбеддингов с алертом
+(ADR-006, п. 7 подтверждения) не написана. Каждое — отдельная задача
+дорожной карты (ADR-021), не забытая часть этой.
 
 `qdrant-client` импортируется лениво (как `sentence_transformers` в
 `SentenceTransformerEmbedder`) — модуль не должен требовать пакет, если Qdrant
@@ -26,6 +29,7 @@ Python-цикл, просто по сети.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
@@ -66,20 +70,38 @@ class QdrantVectorStore:
 
     :param url: адрес Qdrant (`http://localhost:6333`) либо `:memory:` —
         встроенный режим `qdrant-client` без сервера, для тестов.
-    :param collection: имя коллекции. Отдельное имя на окружение убережёт от
-        путаницы, если несколько процессов используют одну и ту же Qdrant.
+    :param collection: имя коллекции — либо алиас, если включён `blue_green`.
+        Отдельное имя на окружение убережёт от путаницы, если несколько
+        процессов используют одну и ту же Qdrant.
+    :param blue_green: переиндексация без простоя поиска (ADR-006, раздел
+        «Реиндексация»). `upsert` пишет в НОВУЮ физическую коллекцию
+        `<collection>__v<время>`, а читатели всё это время ищут по алиасу
+        `<collection>`, который указывает на старую; `publish()` переключает
+        алиас одним атомарным вызовом. Выключено — `upsert` пишет прямо в
+        `collection`, как было (оверрайт на месте, поиск в это время видит
+        смесь старых и новых данных).
 
     Два способа наполнить `_point_count`/`_chunk_ids`, которыми живут
     `search_parts`/`__len__`: `upsert` (пишущая сторона, `scripts/reindex_kb.py`)
     и `attach` (читающая сторона, `build_knowledge_base(reindex=False)`,
     боевой путь Backend при `VECTOR_STORE=qdrant`) — см. докстринг `attach`."""
 
-    def __init__(self, url: str, collection: str) -> None:
+    def __init__(self, url: str, collection: str, *, blue_green: bool = False) -> None:
         self._url = url
         self._collection = collection
+        self._blue_green = blue_green
+        self._target: str | None = None
         self._client: QdrantClient | None = None
         self._point_count = 0
         self._chunk_ids: set[str] = set()
+
+    def _write_target(self) -> str:
+        """Куда пишет `upsert`: сама коллекция либо новая версия для blue-green."""
+        if not self._blue_green:
+            return self._collection
+        if self._target is None:
+            self._target = f"{self._collection}__v{time.strftime('%Y%m%dT%H%M%S')}"
+        return self._target
 
     def _ensure_client(self) -> QdrantClient:
         if self._client is None:
@@ -114,20 +136,77 @@ class QdrantVectorStore:
         if not points:
             return
 
-        if not client.collection_exists(self._collection):
+        target = self._write_target()
+        if not client.collection_exists(target):
             # Не из `points[0].vector`: у PointStruct он типизирован широким
             # объединением (в т.ч. без длины), хотя сюда всегда кладём list.
             vector_size = len(entries[0].vectors[0])
             client.create_collection(
-                self._collection,
+                target,
                 vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
                 # m/ef — параметры ADR-006 (раздел 8.2), не выдумка модуля.
                 hnsw_config=HnswConfigDiff(m=16, ef_construct=128),
             )
 
-        client.upsert(self._collection, points=points)
+        client.upsert(target, points=points)
         self._point_count += len(points)
         self._chunk_ids.update(entry.chunk.chunk_id for entry in entries)
+
+    def publish(self, *, keep_previous: int = 1) -> str | None:
+        """Переключить алиас на только что записанную коллекцию (blue-green).
+
+        Одна атомарная операция `update_collection_aliases`: удаление старой
+        привязки и создание новой идут вместе, читатель не увидит момента, когда
+        алиаса нет. Возвращает имя опубликованной коллекции; `None` — нечего
+        публиковать (`blue_green` выключен либо `upsert` ничего не записал).
+
+        Старые версии не удаляются сразу: `keep_previous` последних остаются
+        для отката — вернуть алиас на прежнюю коллекцию можно одной командой,
+        пока она цела. Остальные удаляются, иначе каждая переиндексация
+        оставляла бы полную копию корпуса.
+
+        Коллекция, чьё имя совпадает с алиасом (прежняя схема — `upsert` прямо в
+        `collection`), мешает создать алиас с тем же именем и удаляется один
+        раз при переходе. Это единственный момент с коротким провалом поиска;
+        дальше переключения атомарны.
+        """
+        from qdrant_client.models import (
+            AliasOperations,
+            CreateAlias,
+            CreateAliasOperation,
+            DeleteAlias,
+            DeleteAliasOperation,
+        )
+
+        if not self._blue_green or self._target is None:
+            return None
+        client = self._ensure_client()
+
+        bound = {a.alias_name: a.collection_name for a in client.get_aliases().aliases}
+        operations: list[AliasOperations] = []
+        if self._collection in bound:
+            operations.append(
+                DeleteAliasOperation(delete_alias=DeleteAlias(alias_name=self._collection))
+            )
+        elif client.collection_exists(self._collection):
+            client.delete_collection(self._collection)  # прежняя схема, см. докстринг
+        operations.append(
+            CreateAliasOperation(
+                create_alias=CreateAlias(
+                    collection_name=self._target, alias_name=self._collection
+                )
+            )
+        )
+        client.update_collection_aliases(change_aliases_operations=operations)
+
+        prefix = f"{self._collection}__v"
+        versions = sorted(
+            c.name for c in client.get_collections().collections
+            if c.name.startswith(prefix) and c.name != self._target
+        )
+        for stale in versions[: max(0, len(versions) - keep_previous)]:
+            client.delete_collection(stale)
+        return self._target
 
     def attach(self) -> int:
         """Открыть уже наполненную коллекцию для поиска, не переиндексируя.

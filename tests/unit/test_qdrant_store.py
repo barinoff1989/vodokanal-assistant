@@ -187,3 +187,87 @@ def test_attach_видит_данные_чужого_upsert():
     assert len(reader) == 2
     found = reader.search_parts([1.0, 0.0])
     assert {chunk.chunk_id for chunk, _ in found} == {"c1", "c2"}
+
+
+# --- blue-green: переиндексация без простоя поиска ------------------------------ #
+
+
+def _entry(chunk_id: str, vector: list[float]) -> _Entry:
+    return _Entry(
+        chunk=ContextChunk(
+            chunk_id=chunk_id, text=chunk_id, source_title="s", source_url="u",
+            relevance_score=0.0,
+        ),
+        vectors=(vector,),
+    )
+
+
+def _bg_store(client_from: QdrantVectorStore | None = None) -> QdrantVectorStore:
+    store = QdrantVectorStore(":memory:", "kb", blue_green=True)
+    if client_from is not None:
+        store._client = client_from._client
+    return store
+
+
+def test_blue_green_читатель_видит_старое_пока_не_publish():
+    first = _bg_store()
+    first.upsert([_entry("old", [1.0, 0.0])])
+    first.publish()
+
+    # Второй прогон пишет в новую версию — читатель по алиасу его пока не видит.
+    second = _bg_store(first)
+    second._target = "kb__v29990101T000000"
+    second.upsert([_entry("new", [1.0, 0.0])])
+
+    reader = _store_on("kb", first)
+    assert reader.attach() == 1
+    assert {c.chunk_id for c, _ in reader.search_parts([1.0, 0.0])} == {"old"}
+
+    second.publish()
+    reader2 = _store_on("kb", first)
+    assert reader2.attach() == 1
+    assert {c.chunk_id for c, _ in reader2.search_parts([1.0, 0.0])} == {"new"}
+
+
+def _store_on(name: str, client_from: QdrantVectorStore) -> QdrantVectorStore:
+    store = _store(name)
+    store._client = client_from._client
+    return store
+
+
+def test_publish_без_upsert_ничего_не_делает():
+    assert _bg_store().publish() is None
+
+
+def test_publish_без_blue_green_ничего_не_делает():
+    store = _store("plain")
+    store.upsert([_entry("a", [1.0, 0.0])])
+    assert store.publish() is None
+
+
+def test_publish_оставляет_только_заданное_число_прежних_версий():
+    store = _bg_store()
+    store._ensure_client()  # общий клиент для всех прогонов ниже
+    for stamp in ("20260101T000001", "20260101T000002", "20260101T000003", "20260101T000004"):
+        run = _bg_store(store)
+        run._target = f"kb__v{stamp}"
+        run.upsert([_entry(stamp, [1.0, 0.0])])
+        run.publish(keep_previous=1)
+
+    client = store._ensure_client()
+    names = sorted(c.name for c in client.get_collections().collections)
+    assert names == ["kb__v20260101T000003", "kb__v20260101T000004"]
+
+
+def test_publish_заменяет_прежнюю_коллекцию_с_тем_же_именем_что_алиас():
+    """Переход со старой схемы: физическая коллекция `kb` мешает алиасу `kb`."""
+    legacy = _store("kb")
+    legacy.upsert([_entry("legacy", [1.0, 0.0])])
+
+    fresh = _bg_store(legacy)
+    fresh.upsert([_entry("fresh", [1.0, 0.0])])
+    assert fresh.publish() is not None
+
+    reader = _store_on("kb", legacy)
+    assert reader.attach() == 1
+    assert {c.chunk_id for c, _ in reader.search_parts([1.0, 0.0])} == {"fresh"}
