@@ -31,7 +31,7 @@ from app.models import (
     RequestMetadata,
     TokenEvent,
 )
-from app.taxonomy import Topic
+from app.taxonomy import InquiryType, Topic
 
 
 class FakeRedis:
@@ -87,6 +87,7 @@ class FakeKnowledgeBase:
 
     def __init__(self, chunks: list[ContextChunk] | None = None) -> None:
         self.queries: list[str] = []
+        self.filters: list[str | None] = []
         self._chunks = chunks or [
             ContextChunk(
                 chunk_id="faq-01",
@@ -99,6 +100,7 @@ class FakeKnowledgeBase:
 
     def search(self, query: str, **kwargs: Any) -> list[ContextChunk]:
         self.queries.append(query)
+        self.filters.append(kwargs.get("inquiry_type"))
         return list(self._chunks)
 
 
@@ -570,3 +572,25 @@ async def test_тема_из_метаданных_классификатор_н�
     assert isinstance(response, GenerateResponse)
     assert response.answer == "ответ по теме"
     assert fallback.calls == 0
+
+
+# --- тип обращения уходит в фильтр поиска (ADR-006) ------------------------------ #
+
+
+@pytest.mark.parametrize(
+    ("inquiry_type", "expected"),
+    [
+        (InquiryType.METER_SEALING, "meter_sealing"),
+        (InquiryType.OTHER, None),  # «не знаем» — без фильтра
+        (None, None),
+    ],
+)
+async def test_тип_обращения_передаётся_в_поиск(inquiry_type, expected):
+    kb = FakeKnowledgeBase()
+    backend = Orchestrator(_gateway(completion=_completion()), knowledge_base=kb)
+    metadata = RequestMetadata(
+        subscriber_id="sub-1", session_id="sess-1", inquiry_type=inquiry_type
+    )
+    await backend.generate(_request(metadata=metadata))
+
+    assert kb.filters and kb.filters[-1] == expected

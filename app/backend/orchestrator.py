@@ -66,6 +66,7 @@ from app.models import (
     TokenEvent,
     Usage,
 )
+from app.taxonomy import InquiryType
 
 __all__ = ["DirectAnswer", "DirectResponder", "Orchestrator"]
 
@@ -350,11 +351,20 @@ class Orchestrator:
         # запросов, находящихся в поиске прямо сейчас.
         metrics.VECTOR_DB_PENDING.inc()
         try:
+            # Тип обращения ищет вместе с поиском, не после (ADR-006, правило
+            # 4.8). `other` и отсутствие типа — «не знаем»: фильтровать по
+            # догадке значило бы потерять нужный фрагмент, поэтому без фильтра.
+            inquiry_type = request.metadata.inquiry_type
             chunks = self._kb.search(
                 request.query,
                 top_n=self._settings.rerank_top_n,
                 threshold=self._settings.score_threshold,
                 top_k=self._settings.vector_top_k,
+                inquiry_type=(
+                    inquiry_type.value
+                    if inquiry_type is not None and inquiry_type is not InquiryType.OTHER
+                    else None
+                ),
             )
         finally:
             metrics.VECTOR_DB_PENDING.dec()
