@@ -300,6 +300,9 @@ body {
   background: var(--surface); color: var(--ink);
   border: 1.6px solid var(--line); border-radius: 8px;
 }
+.composer textarea:disabled {
+  background: var(--surface-2); color: var(--ink-muted); cursor: not-allowed;
+}
 .composer textarea:focus {
   outline: none; border-color: var(--accent-bright);
   box-shadow: 0 0 0 3px rgba(51, 190, 253, 0.18);

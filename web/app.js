@@ -81,6 +81,13 @@ const ui = {
 
 let tokensUsed = 0;
 
+// Черновик обращения ждёт решения абонента (кнопки-подсказки под ответом или
+// открытая панель подтверждения) — композер заблокирован, пока это не так.
+// Отдельный флаг нужен потому, что finally в ask() выполняется и для того
+// вызова, что как раз показал черновик: без флага он тут же снял бы блокировку,
+// которую сам только что поставил.
+let awaitingDecision = false;
+
 /* --- справочник абонентов (роль Session Context Provider на стенде) -------- */
 
 function currentSubscriber() {
@@ -161,6 +168,9 @@ function selectSubscriber(account, { announce } = { announce: true }) {
 function resetDialog() {
   ui.feed.innerHTML = "";
   ui.confirm.hidden = true;
+  awaitingDecision = false;
+  ui.query.disabled = false;
+  ui.send.disabled = false;
   ui.query.value = "";
   ui.counter.textContent = "0 / 2000";
   tokensUsed = 0;
@@ -286,6 +296,14 @@ function renderActions(node, actions) {
     block.appendChild(button);
   });
   node.parentElement.appendChild(block);
+
+  // Черновик появился — свободный текст в композере блокируется, пока
+  // абонент не нажмёт одну из кнопок. Без этого следующий вопрос уходил бы
+  // мимо черновика на обычный поиск по базе знаний и возвращал ответ не по
+  // теме, никак не объясняя, что случилось с предложенным обращением.
+  awaitingDecision = true;
+  ui.query.disabled = true;
+  ui.send.disabled = true;
 }
 
 /*
@@ -305,6 +323,7 @@ function renderActions(node, actions) {
 function chooseAction(action, block) {
   block.querySelectorAll("button").forEach((button) => (button.disabled = true));
   if (action.action === "reject") {
+    awaitingDecision = false;
     ask("Отменить", "reject");
     return;
   }
@@ -322,10 +341,20 @@ function showConfirmation() {
   const from = last.indexOf("Могу оформить обращение:");
   ui.confirmBody.textContent = from >= 0 ? last.slice(from) : last;
   ui.confirm.hidden = false;
+
+  // Пока подтверждение не закрыто — свободный текст в композере блокируется.
+  // Без этого сообщение вроде «оформи обращение» уходило бы как новый
+  // вопрос мимо кнопок Подтвердить/Отменить, попадало на поиск по базе
+  // знаний и возвращало ответ не по теме черновика — то же нарушение
+  // правила 4.7, что и молчаливое согласие: подтверждением признаётся
+  // только нажатие кнопки.
+  ui.query.disabled = true;
+  ui.send.disabled = true;
 }
 
 ui.confirmYes.addEventListener("click", () => {
   ui.confirm.hidden = true;
+  awaitingDecision = false;
   // Текст реплики нужен ленте диалога; решение принимает признак `intent`, а не
   // эти слова: правило 4.7 не признаёт подтверждением свободный текст.
   ask("Подтверждаю", "confirm");
@@ -333,6 +362,7 @@ ui.confirmYes.addEventListener("click", () => {
 
 ui.confirmNo.addEventListener("click", () => {
   ui.confirm.hidden = true;
+  awaitingDecision = false;
   ask("Отменить", "reject");
 });
 
@@ -506,7 +536,13 @@ async function ask(question, intent) {
     logEvent("error", String(error.message));
   } finally {
     node.classList.remove("typing");
-    ui.send.disabled = false;
+    // Не снимать блокировку, если именно этот ответ и поставил черновик на
+    // ожидание (renderActions выше в этом же вызове) — иначе finally тут же
+    // отменил бы её.
+    if (!awaitingDecision) {
+      ui.send.disabled = false;
+      ui.query.disabled = false;
+    }
   }
 }
 
@@ -535,6 +571,10 @@ function escape(value) {
 
 ui.form.addEventListener("submit", (event) => {
   event.preventDefault();
+  // Disabled-атрибут не пускает сюда обычным вводом (текстовое поле не
+  // получает фокус), но проверка не лишняя — тем же приёмом, что и
+  // "правило 4.7 не признаёт подтверждением свободный текст" чуть ниже.
+  if (awaitingDecision) return;
   const question = ui.query.value.trim();
   if (!question) return;
   addMessage("user", question);
