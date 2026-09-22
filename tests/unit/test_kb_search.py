@@ -308,10 +308,17 @@ def _knowledge_base():
 
     Подменённая модель здесь не годится: проверяется, что вопрос и ответ попали
     в индекс порознь, а это свойство сборки, а не поиска.
-    """
+
+    `vector_store="memory"` зафиксирован явно, не унаследован из окружения:
+    ниже проверяется приватное устройство `InMemoryVectorStore`
+    (`knowledge_base._store._entries`), которого нет у `QdrantVectorStore`.
+    Без фиксации тест падал бы `AttributeError`, стоило задать в окружении
+    процесса `VECTOR_STORE=qdrant` (например, внутри контейнера backend)."""
+    from app.config import Settings
     from app.kb.build import build_knowledge_base
 
-    knowledge_base = build_knowledge_base()
+    settings = Settings(_env_file=None, vector_store="memory")
+    knowledge_base = build_knowledge_base(settings)
     if knowledge_base is None:
         pytest.skip("корпус базы знаний не найден")
     return knowledge_base
