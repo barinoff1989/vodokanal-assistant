@@ -15,12 +15,12 @@ language: ru
 
 | № | Файл | Что внутри |
 |---|---|---|
-| ADR-100 | [ADR-100-scope-and-limitations.md](ADR-100-scope-and-limitations.md) | Что сдаётся на Этапе 1, что явно отложено на Этап 2/3 и почему; какие узлы диаграмм C1–C3 помечены «Этап 2» |
-| ADR-200 | [ADR-200-tech-stack-by-stage.md](ADR-200-tech-stack-by-stage.md) | Технологический стек на каждом этапе, сравнение с альтернативами по каждому слою |
-| ADR-300 | [ADR-300-model-selection.md](ADR-300-model-selection.md) | Три модели по ролям — классификация, эмбеддинги, генерация — с аналогами по каждой |
-| ADR-400 | [ADR-400-security-by-stage.md](ADR-400-security-by-stage.md) | Что закрыто сейчас (ПДн, HITL, лимиты) и что на Этапе 2/3 (секреты, аудит записи, доступ) |
-| ADR-500 | [ADR-500-resources-and-cost.md](ADR-500-resources-and-cost.md) | Ресурсы и ориентировочная стоимость эксплуатации по этапам |
-| ADR-600 | [ADR-600-roadmap-and-migration.md](ADR-600-roadmap-and-migration.md) | Дорожная карта: что делать на переходе Этап 1→2→3, сроки, стоимость разработки |
+| ADR-100 | [ADR-100-scope-and-limitations.md](ADR/ADR-100-scope-and-limitations.md) | Что сдаётся на Этапе 1, что явно отложено на Этап 2/3 и почему; какие узлы диаграмм C1–C3 помечены «Этап 2» |
+| ADR-200 | [ADR-200-tech-stack-by-stage.md](ADR/ADR-200-tech-stack-by-stage.md) | Технологический стек на каждом этапе, сравнение с альтернативами по каждому слою |
+| ADR-300 | [ADR-300-model-selection.md](ADR/ADR-300-model-selection.md) | Три модели по ролям — классификация, эмбеддинги, генерация — с аналогами по каждой |
+| ADR-400 | [ADR-400-security-by-stage.md](ADR/ADR-400-security-by-stage.md) | Что закрыто сейчас (ПДн, HITL, лимиты) и что на Этапе 2/3 (секреты, аудит записи, доступ) |
+| ADR-500 | [ADR-500-resources-and-cost.md](ADR/ADR-500-resources-and-cost.md) | Ресурсы и ориентировочная стоимость эксплуатации по этапам |
+| ADR-600 | [ADR-600-roadmap-and-migration.md](ADR/ADR-600-roadmap-and-migration.md) | Дорожная карта: что делать на переходе Этап 1→2→3, сроки, стоимость разработки |
 | ТЗ | [TZ-business-requirements.md](TZ-business-requirements.md) / [.docx](TZ-business-requirements.docx) | Техническое задание — бизнес-требования к системе «с нуля», не привязанные к нашим ADR: то, из чего архитектурные решения проекта следовали бы, а не то, что их пересказывает |
 | Приложение | [Capacity_Report.html](Capacity_Report.html) | Расчёт нагрузки и sizing — допущения, формулы, разбор по сценариям (детализация к ADR-500) |
 
