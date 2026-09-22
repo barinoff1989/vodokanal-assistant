@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from app.backend.orchestrator import DirectAnswer
 from app.models import GenerateRequest
@@ -26,12 +26,6 @@ from app.tariffs.store import Tariff, TariffStore
 from app.taxonomy import Topic
 
 __all__ = ["TariffResponder"]
-
-DEFAULT_MAX_AGE = timedelta(days=180)
-"""После какого возраста файла ответ сопровождается оговоркой.
-
-Полгода взяты не наугад: тарифы меняются с 1 января и с 1 июля, то есть файл
-старше полугода заведомо пропустил одно изменение."""
 
 
 def _money(value: object) -> str:
@@ -44,7 +38,6 @@ class TariffResponder:
     """Отвечает на вопрос о цене куба."""
 
     store: TariffStore
-    max_age: timedelta = DEFAULT_MAX_AGE
 
     def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer | None:
         if request.metadata.topic is not Topic.TARIFF:
@@ -74,7 +67,7 @@ class TariffResponder:
             )
             lines.append(f"С {starts_on} тариф изменится: {listed}.")
 
-        return DirectAnswer(text="\n".join(lines), disclaimer=self._disclaimer(today))
+        return DirectAnswer(text="\n".join(lines))
 
     def _next_changes(self, current: list[Tariff], today: date) -> list[Tariff]:
         """Все услуги, дорожающие в ближайшую дату изменения.
@@ -101,17 +94,3 @@ class TariffResponder:
             for tariff in self.store.on(first.starts_on)
             if same.get(tariff.service) != tariff.for_population
         ]
-
-    def _disclaimer(self, today: date) -> str:
-        """Когда прочитана страница — и оговорка, если давно.
-
-        Без отметки ассистент отвечает по полугодовому файлу так же уверенно,
-        как в день загрузки. Та же дисциплина, что у графика отключений.
-        """
-        stamp = self.store.fetched_on.strftime("%d.%m.%Y")
-        if today - self.store.fetched_on > self.max_age:
-            return (
-                f"Данные с сайта водоканала от {stamp} — с тех пор тариф "
-                "мог измениться, уточните в контакт-центре."
-            )
-        return f"По данным с сайта водоканала от {stamp}."

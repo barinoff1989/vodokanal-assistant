@@ -119,7 +119,7 @@ class TemplateResponder:
         if request.metadata.topic is Topic.TEMPLATE:
             template_id = match_template(lowered)
             if template_id is None:
-                return DirectAnswer(text=self._menu(), disclaimer=_DISCLAIMER)
+                return DirectAnswer(text=self._menu())
             return self._start(request, session, template_id, lowered, now)
 
         # Свободная реплика во время сбора — это ответ на заданный вопрос. Но
@@ -245,7 +245,7 @@ class TemplateResponder:
             url = self.artifacts.put(render_html(title, body, disclaimer=_DISCLAIMER))
         if url is not None:
             lead += " Печатную версию откройте по ссылке под ответом."
-        return DirectAnswer(text=lead + "\n\n" + body, disclaimer=_DISCLAIMER, document_url=url)
+        return DirectAnswer(text=lead + "\n\n" + body, document_url=url)
 
     def _render(
         self,

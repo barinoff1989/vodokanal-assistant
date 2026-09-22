@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -109,22 +109,6 @@ def test_изменение_без_изменения_цены_не_объявл
     )
     assert answer is not None
     assert "изменится" not in answer.text
-
-
-def test_старый_файл_отвечает_с_оговоркой(store: TariffStore):
-    """Без отметки ассистент отвечает по полугодовому файлу так же уверенно,
-    как в день загрузки."""
-    responder = TariffResponder(store, max_age=timedelta(days=1))
-    answer = responder.answer(request(Topic.TARIFF), now=datetime(2026, 9, 20, 12, 0))
-    assert answer is not None
-    assert answer.disclaimer is not None
-    assert "мог измениться" in answer.disclaimer
-
-
-def test_свежий_файл_называет_дату_без_тревоги(responder: TariffResponder):
-    answer = responder.answer(request(Topic.TARIFF), now=NOW)
-    assert answer is not None
-    assert answer.disclaimer == "По данным с сайта водоканала от 04.09.2026."
 
 
 # --- настоящая таблица --------------------------------------------------------- #

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from app.models import GenerateRequest, GenerationParameters, RequestMetadata
 from app.outages.answer import OutageResponder, parse_address
-from app.outages.store import DEFAULT_MAX_AGE, OutageStore
+from app.outages.store import OutageStore
 from app.taxonomy import Topic
 
 FIXTURE = Path(__file__).resolve().parents[1] / "data" / "outage_schedule.txt"
@@ -130,30 +130,3 @@ def test_прошедшие_отключения_не_предлагаются(r
     )
     assert answer is not None
     assert "нет" in answer.text.lower()
-
-
-# --- оговорка об актуальности ------------------------------------------------ #
-
-
-def test_в_ответе_всегда_есть_дата_получения_графика(responder: OutageResponder):
-    answer = responder.answer(ask("г. Тестовый, Набережная, д. 1"), now=NOW)
-    assert answer is not None
-    assert answer.disclaimer is not None
-    assert "01.08.2026" in answer.disclaimer
-
-
-def test_устаревший_график_отвечает_с_предупреждением(responder: OutageResponder):
-    """Без оговорки ассистент ответит по месячному файлу так же уверенно, как в
-    день его получения."""
-    stale_now = LOADED_AT + DEFAULT_MAX_AGE + timedelta(days=1)
-    answer = responder.answer(ask("г. Тестовый, Набережная, д. 1"), now=stale_now)
-    assert answer is not None
-    assert answer.disclaimer is not None
-    assert "устареть" in answer.disclaimer
-
-
-def test_свежий_график_отвечает_без_предупреждения(responder: OutageResponder):
-    answer = responder.answer(ask("г. Тестовый, Набережная, д. 1"), now=NOW)
-    assert answer is not None
-    assert answer.disclaimer is not None
-    assert "устареть" not in answer.disclaimer

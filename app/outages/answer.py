@@ -22,12 +22,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from app.backend.orchestrator import DirectAnswer
 from app.models import GenerateRequest
 from app.outages.parser import normalize_house, normalize_street
-from app.outages.store import DEFAULT_MAX_AGE, OutageStore
+from app.outages.store import OutageStore
 from app.taxonomy import Topic
 
 __all__ = ["OutageResponder", "parse_address"]
@@ -93,11 +93,9 @@ class OutageResponder:
     его выдумает.
 
     :param store: прочитанный график.
-    :param max_age: после какого возраста данных ответ идёт с оговоркой.
     """
 
     store: OutageStore
-    max_age: timedelta = DEFAULT_MAX_AGE
 
     def answer(self, request: GenerateRequest, *, now: datetime) -> DirectAnswer | None:
         if request.metadata.topic is not Topic.OUTAGE:
@@ -130,15 +128,4 @@ class OutageResponder:
                 # виден абоненту (ADR-013).
                 text += " В графике указано несколько периодов — приводим все."
 
-        return DirectAnswer(text=text, disclaimer=self._disclaimer(now))
-
-    def _disclaimer(self, now: datetime) -> str:
-        """Когда прочитан график — и оговорка, если он стар.
-
-        Без отметки ассистент отвечает по месячному файлу так же уверенно, как в
-        день его получения.
-        """
-        loaded = f"Данные графика получены {self.store.loaded_at:%d.%m.%Y}."
-        if self.store.is_stale(now, self.max_age):
-            return loaded + " Они могли устареть — уточните в диспетчерской службе."
-        return loaded
+        return DirectAnswer(text=text)

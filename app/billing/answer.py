@@ -47,8 +47,6 @@ from app.taxonomy import Topic
 __all__ = ["AccountResponder", "resolve_period"]
 
 
-_DISCLAIMER = "По данным лицевого счёта."
-
 
 # Спор, а не справка. Проверяется до всего остального: если вопрос про «почему»,
 # отвечать «сколько» бессмысленно, даже когда в тексте есть слово «задолженность».
@@ -240,13 +238,13 @@ class AccountResponder:
             text = f"По лицевому счёту {number} задолженности нет."
             if account.balance > 0:
                 text += f" На счёте переплата {_money(account.balance)} ₽."
-            return DirectAnswer(text=text, disclaimer=_DISCLAIMER)
+            return DirectAnswer(text=text)
 
         by_period = self._debt_by_period(number)
         text = f"Задолженность по лицевому счёту {number}: {_money(account.debt)} ₽."
         if by_period:
             text += "\nВ том числе:\n" + "\n".join(by_period)
-        return DirectAnswer(text=text, disclaimer=_DISCLAIMER)
+        return DirectAnswer(text=text)
 
     def _debt_by_period(self, number: str) -> list[str]:
         lines: list[str] = []
@@ -264,7 +262,6 @@ class AccountResponder:
         if period is None:
             return DirectAnswer(
                 text=f"По лицевому счёту {number} начислений в данных нет.",
-                disclaimer=_DISCLAIMER,
             )
 
         rows = [c for c in self.billing.charges(number) if c.period == period]
@@ -275,7 +272,6 @@ class AccountResponder:
                     f"За {_period_ru(period)} начислений по лицевому счёту {number} "
                     f"в данных нет. Есть за: {have}."
                 ),
-                disclaimer=_DISCLAIMER,
             )
 
         lines = [
@@ -289,14 +285,13 @@ class AccountResponder:
             + "\n".join(lines)
             + f"\nВсего начислено: {_money(total)} ₽."
         )
-        return DirectAnswer(text=text, disclaimer=_DISCLAIMER)
+        return DirectAnswer(text=text)
 
     def _verification(self, number: str, today: date) -> DirectAnswer:
         meters = self.billing.meters(number)
         if not meters:
             return DirectAnswer(
                 text=f"По лицевому счёту {number} счётчиков в данных нет.",
-                disclaimer=_DISCLAIMER,
             )
 
         parts: list[str] = []
@@ -313,14 +308,13 @@ class AccountResponder:
                 parts.append(
                     f"{label}: поверка действительна до {meter.verify_by:%d.%m.%Y}"
                 )
-        return DirectAnswer(text="\n".join(parts), disclaimer=_DISCLAIMER)
+        return DirectAnswer(text="\n".join(parts))
 
     def _readings(self, number: str) -> DirectAnswer:
         meters = self.billing.meters(number)
         if not meters:
             return DirectAnswer(
                 text=f"По лицевому счёту {number} счётчиков в данных нет.",
-                disclaimer=_DISCLAIMER,
             )
 
         parts: list[str] = []
@@ -335,6 +329,5 @@ class AccountResponder:
         if not parts:
             return DirectAnswer(
                 text=f"По лицевому счёту {number} переданных показаний в данных нет.",
-                disclaimer=_DISCLAIMER,
             )
-        return DirectAnswer(text="\n".join(parts), disclaimer=_DISCLAIMER)
+        return DirectAnswer(text="\n".join(parts))
