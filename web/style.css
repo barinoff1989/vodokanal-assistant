@@ -97,6 +97,24 @@ body {
 .card h2 { margin: 0 0 6px; font-size: 15px; color: var(--accent-ink); }
 .hint { margin: 0 0 12px; font-size: 12.5px; color: var(--ink-muted); }
 
+/* Раскрываемые блоки: данные абонента и служебная панель скрыты по
+   умолчанию — открываются по клику, не занимают экран без необходимости. */
+.disclosure { margin-top: 10px; }
+.disclosure summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--accent-ink);
+  padding: 6px 13px; border: 1.6px solid var(--accent); border-radius: 999px;
+}
+.disclosure summary::-webkit-details-marker { display: none; }
+.disclosure summary::before {
+  content: "▸"; font-size: 10px; transition: transform .15s ease;
+}
+.disclosure[open] summary::before { transform: rotate(90deg); }
+.disclosure[open] summary { margin-bottom: 10px; }
+.disclosure summary:hover { background: var(--surface-2); }
+.disclosure summary:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
 .field { display: block; margin-bottom: 12px; }
 .field span { display: block; font-size: 12px; color: var(--ink-muted); margin-bottom: 4px; }
 .field select,

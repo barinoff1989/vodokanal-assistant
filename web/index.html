@@ -52,40 +52,45 @@
       <ul class="directory" id="directory" role="listbox" aria-label="Абоненты"></ul>
       <p class="dir-meta" id="dir-meta">загрузка справочника…</p>
 
-      <dl class="profile" id="profile"></dl>
-
-      <p class="stub-note">
-        Профиль — из присланного примера Биллинга (<code>data_example/</code>):
-        ФИО, адреса и счётчики синтетические, это не настоящие абоненты.
-        Настоящий Биллинг внутри закрытой сети, на MVP заменится только чтение.
-      </p>
+      <details class="disclosure">
+        <summary>Данные абонента</summary>
+        <dl class="profile" id="profile"></dl>
+        <p class="stub-note">
+          Профиль — из присланного примера Биллинга (<code>data_example/</code>):
+          ФИО, адреса и счётчики синтетические, это не настоящие абоненты.
+          Настоящий Биллинг внутри закрытой сети, на MVP заменится только чтение.
+        </p>
+      </details>
     </section>
 
     <section class="card">
       <h2>Служебная панель</h2>
-      <p class="hint">Видно то, что абоненту не показывают: сырые события, отчёты, расход.</p>
+      <details class="disclosure">
+        <summary>Лог и техническая информация</summary>
+        <p class="hint">Видно то, что абоненту не показывают: сырые события, отчёты, расход.</p>
 
-      <dl class="metrics">
-        <dt>Опознаватель запроса</dt><dd id="m-trace">—</dd>
-        <dt>Найдено ПДн</dt><dd id="m-pii">—</dd>
-        <dt>Отвечала модель</dt><dd id="m-model">—</dd>
-        <dt>Причина завершения</dt><dd id="m-finish">—</dd>
-        <dt>Токенов за сессию</dt><dd id="m-tokens">0</dd>
-        <dt>Время до первого куска</dt><dd id="m-ttft">—</dd>
-      </dl>
+        <dl class="metrics">
+          <dt>Опознаватель запроса</dt><dd id="m-trace">—</dd>
+          <dt>Найдено ПДн</dt><dd id="m-pii">—</dd>
+          <dt>Отвечала модель</dt><dd id="m-model">—</dd>
+          <dt>Причина завершения</dt><dd id="m-finish">—</dd>
+          <dt>Токенов за сессию</dt><dd id="m-tokens">0</dd>
+          <dt>Время до первого куска</dt><dd id="m-ttft">—</dd>
+        </dl>
 
-      <div class="events-head">
-        <span>События потока</span>
-        <button type="button" id="clear-events" class="link">очистить</button>
-      </div>
-      <ol class="events" id="events"></ol>
+        <div class="events-head">
+          <span>События потока</span>
+          <button type="button" id="clear-events" class="link">очистить</button>
+        </div>
+        <ol class="events" id="events"></ol>
 
-      <p class="stub-note">
-        Здесь видно то, что происходит с <b>этим</b> запросом. Накопленные величины —
-        длительность обезличивания, время проверки охранителей, отказы по лимиту —
-        внутренние для сервера и в контракт не входят: они на
-        <a href="http://localhost:9100/metrics" target="_blank" rel="noopener">порту метрик</a>.
-      </p>
+        <p class="stub-note">
+          Здесь видно то, что происходит с <b>этим</b> запросом. Накопленные величины —
+          длительность обезличивания, время проверки охранителей, отказы по лимиту —
+          внутренние для сервера и в контракт не входят: они на
+          <a href="http://localhost:9100/metrics" target="_blank" rel="noopener">порту метрик</a>.
+        </p>
+      </details>
     </section>
   </aside>
 
