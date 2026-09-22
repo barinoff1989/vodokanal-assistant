@@ -153,8 +153,7 @@ function selectSubscriber(account, { announce } = { announce: true }) {
     resetDialog();
     addMessage(
       "assistant",
-      "Вошли как " + entry.name + ". Сессия та же, идентификатор абонента " +
-        "изменился — на этом и проверяется привязка сессии к абоненту.",
+      "Добрый день, " + entry.name + "! Чем вам помочь?",
     );
   }
 }
