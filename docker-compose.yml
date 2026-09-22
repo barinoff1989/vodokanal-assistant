@@ -66,10 +66,13 @@ services:
       retries: 5
 
   # --- Шаг 5 -----------------------------------------------------------------
-  # Векторное хранилище (settings.vector_store="qdrant") — опционально, по
-  # умолчанию поиск работает в памяти процесса (app/kb/search.py,
-  # InMemoryVectorStore). Поднимать эту службу нужно, только если явно
-  # переключились на Qdrant.
+  # Векторное хранилище. Вне контейнерного стека — опционально (по умолчанию
+  # поиск работает в памяти процесса, app/kb/search.py, InMemoryVectorStore).
+  # Внутри этого файла — обычная (не опциональная) зависимость backend и
+  # reindex: раз оркестрация уже поднимает Compose-стек целиком, используется
+  # настоящий Qdrant, а не InMemoryVectorStore (см. VECTOR_STORE в backend/
+  # reindex ниже — переопределён на qdrant, дефолт "memory" остаётся верным
+  # только для хостового запуска вне Compose).
   qdrant:
     image: qdrant/qdrant:latest
     container_name: vk-qdrant
@@ -90,6 +93,72 @@ services:
   #   command: server /data --console-address ":9001"
   #   ports: ["9000:9000", "9001:9001"]
   #   volumes: [minio_data:/data]
+
+  # --- Backend -----------------------------------------------------------
+  # Одноразовое наполнение Qdrant перед стартом backend — тот же приём, что
+  # `scripts/reindex_kb.py` на хосте (Backend сам не пересчитывает эмбеддинги
+  # при своём старте, reindex_kb.py — отдельный прогон), только теперь прогон
+  # автоматический, часть подъёма стека, а не ручная команда разработчика.
+  # exit code 0 при пустом или уже наполненном корпусе, поэтому безопасно
+  # выполнять при каждом `docker compose up`.
+  reindex:
+    build: .
+    container_name: vk-reindex
+    restart: "no"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      VECTOR_STORE: qdrant
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_faq}
+    command: ["python", "scripts/reindex_kb.py"]
+
+  # Backend читает переменные окружения ХОСТА через подстановку ${VAR} —
+  # Compose делает это сама при `docker compose up`, никакого файла .env для
+  # этого заводить не нужно (см. env.example.sh — справочник команд export,
+  # не файл для авточтения).
+  backend:
+    build: .
+    container_name: vk-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reindex:
+        condition: service_completed_successfully
+    environment:
+      # Имена сервисов Compose вместо localhost — единственное, что отличает
+      # контейнерный запуск от хостового; дефолты в app/config.py не тронуты.
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_faq}
+      VECTOR_STORE: qdrant
+      # Ollama не контейнеризирована, остаётся сервисом хоста — из контейнера
+      # доступна по host.docker.internal, не localhost (Docker Desktop
+      # добавляет этот алиас автоматически на Windows/Mac).
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # Секреты и остальная конфигурация — из настоящих переменных окружения
+      # хоста (export/setx), не из файла.
+      APP_ENV: ${APP_ENV:-local}
+      LLM_PROVIDER: ${LLM_PROVIDER:-local-test}
+      YANDEX_API_KEY: ${YANDEX_API_KEY:-}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
+      YANDEX_API_BASE: ${YANDEX_API_BASE:-https://llm.api.cloud.yandex.net/v1}
+      YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_CORP}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live-reload при разработке — без пересборки образа на каждую правку.
+      - ./app:/app/app
+      - ./web:/app/web
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]
 
   # --- Шаг 10 ----------------------------------------------------------------
   # prometheus, clickhouse — добавляются вместе с метриками кода

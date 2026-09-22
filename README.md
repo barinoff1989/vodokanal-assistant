@@ -57,7 +57,29 @@ ollama pull qwen2.5:7b-instruct-q4_K_M && python -m pytest -q -m live
 
 Без Ollama живые тесты пропускаются с объяснением, а не падают.
 
-Запуск сервиса и демо-стенда:
+### Запуск сервиса и демо-стенда
+
+**Основной путь — Docker Compose**, поднимает весь стек: Postgres/Redis/Qdrant, одноразовую
+переиндексацию базы знаний в Qdrant и сам Backend (multi-stage `Dockerfile`, `--reload` живёт через
+volume-монтирование `app/`/`web/`, пересборка образа не нужна на каждую правку кода):
+
+```bash
+docker compose up -d
+```
+
+Демо-стенд — `http://localhost:8000`, Swagger — `http://localhost:8000/docs`. Секреты (`YANDEX_API_KEY`
+и т.п.) Compose подставляет из переменных окружения хоста — см. раздел ниже, файла `.env` не заводится.
+Ollama (провайдер `local-test`) не контейнеризирована, остаётся сервисом хоста — из контейнера Backend
+доступна по `http://host.docker.internal:11434` (уже задано в `docker-compose.yml`).
+
+Пересобрать образ после изменения зависимостей (`pyproject.toml`) или системных файлов:
+
+```bash
+docker compose build backend reindex
+```
+
+**Альтернатива — голый `uvicorn` на хосте**, без Docker вообще (быстрее для точечной отладки, но нужно
+поднять Postgres/Redis самому и держать зависимости Python в системе):
 
 ```bash
 python -m uvicorn app.main:app --reload

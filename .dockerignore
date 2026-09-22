@@ -1,0 +1,35 @@
+# Зеркалит .gitignore плюс специфичное для контейнера: документация, тесты и
+# инструменты разработки не нужны рантайм-образу.
+
+.git/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.claude/
+
+# Документация, тесты, скрипты замеров — не часть рантайма
+AI_docs/
+tests/
+*.md
+env.example.sh
+
+# Данные, которые собираются отдельными скриптами или не нужны рантайму
+fixtures/*.csv
+golden_set/
+models/
+*.gguf
+.documents/
+
+# Файлы самой сборки — образу не нужны сами себе.
+# docker/postgres/init/*.sql — НЕ сюда: их читает не только контейнер
+# postgres, но и сам Backend в рантайме (app/gateway/usage.py,
+# app/quality/store.py, app/inquiries/store.py) — см. Dockerfile.
+docker-compose.yml
+Dockerfile
