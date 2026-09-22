@@ -1,16 +1,21 @@
-/* Демо-стенд. Оформление намеренно сдержанное: это заглушка вместо личного
-   кабинета, а не дизайн-макет. Задача — чтобы на защите было видно устройство
-   виджета и то, что происходит под ним. */
+/* Демо-стенд. Оформление — по образу личного кабинета lk.rosvodokanal.ru
+   (палитра, скругления, пилюльные кнопки), не копия: это по-прежнему
+   заглушка, а не рабочий кабинет, и явно помечена как демо-стенд. Задача —
+   чтобы на защите было видно устройство виджета и то, что происходит под
+   ним, в узнаваемой для водоканала визуальной среде. */
 
 :root {
   --bg: #f4f7f8;
   --surface: #fff;
   --surface-2: #eef3f5;
-  --ink: #12222b;
+  --ink: #16324f;
   --ink-muted: #5b7079;
-  --line: #d8e3e7;
-  --accent: #0e7c86;
-  --accent-ink: #06373d;
+  --line: #dce4e8;
+  --accent: #1074b9;
+  --accent-bright: #33befd;
+  --accent-ink: #0a4a75;
+  --header-from: #dceaf7;
+  --header-to: #ffffff;
   --good: #1b8f5e;
   --warn: #a66a12;
   --crit: #b33d26;
@@ -27,8 +32,11 @@
     --ink: #e6f0f2;
     --ink-muted: #91a7ad;
     --line: #24343a;
-    --accent: #3fc7d1;
+    --accent: #4fb3e8;
+    --accent-bright: #33befd;
     --accent-ink: #bdf0f3;
+    --header-from: #16232c;
+    --header-to: #121e23;
     --good: #4fcb93;
     --warn: #e3ae55;
     --crit: #e88a76;
@@ -43,19 +51,23 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
 }
 
 /* --- Шапка кабинета ------------------------------------------------------- */
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 22px;
-  background: var(--surface);
+  padding: 14px 24px;
+  background: linear-gradient(180deg, var(--header-from), var(--header-to));
   border-bottom: 1px solid var(--line);
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
-.brand .drop { color: var(--accent); font-size: 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--accent-ink); }
+.brand .drop {
+  color: #fff; background: var(--accent); font-size: 15px;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 
 /* Пометка, что кабинет ненастоящий. Без неё стенд на скриншоте неотличим от
    рабочей системы, и это вводило бы в заблуждение. */
@@ -80,17 +92,23 @@ body {
 .card {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 10px; padding: 15px 17px;
+  box-shadow: 0 1px 3px rgba(16, 116, 185, 0.06);
 }
-.card h2 { margin: 0 0 6px; font-size: 15px; }
+.card h2 { margin: 0 0 6px; font-size: 15px; color: var(--accent-ink); }
 .hint { margin: 0 0 12px; font-size: 12.5px; color: var(--ink-muted); }
 
 .field { display: block; margin-bottom: 12px; }
 .field span { display: block; font-size: 12px; color: var(--ink-muted); margin-bottom: 4px; }
 .field select,
 .field input[type="search"] {
-  width: 100%; padding: 7px 9px; font: inherit;
-  background: var(--surface-2); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 7px;
+  width: 100%; padding: 8px 10px; font: inherit;
+  background: var(--surface); color: var(--ink);
+  border: 1.6px solid var(--line); border-radius: 5px;
+}
+.field select:focus,
+.field input[type="search"]:focus {
+  outline: none; border-color: var(--accent-bright);
+  box-shadow: 0 0 0 3px rgba(51, 190, 253, 0.18);
 }
 
 /* --- Справочник абонентов ----------------------------------------------- */
@@ -166,12 +184,15 @@ body {
 .widget {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 10px; display: flex; flex-direction: column; min-height: 560px;
+  box-shadow: 0 1px 3px rgba(16, 116, 185, 0.06);
 }
 .widget-head {
   display: flex; align-items: baseline; justify-content: space-between;
   padding: 14px 18px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--header-from), var(--surface) 140%);
+  border-radius: 10px 10px 0 0;
 }
-.widget-head h1 { margin: 0; font-size: 16px; }
+.widget-head h1 { margin: 0; font-size: 16px; color: var(--accent-ink); }
 .state {
   font-family: var(--mono); font-size: 11px; color: var(--ink-muted);
 }
@@ -188,10 +209,10 @@ body {
   font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em;
 }
 .msg .text {
-  padding: 10px 13px; border-radius: 10px; white-space: pre-wrap;
+  padding: 10px 13px; border-radius: 14px; white-space: pre-wrap;
   background: var(--surface-2);
 }
-.msg.user .text { background: var(--accent); color: #fff; }
+.msg.user .text { background: var(--accent-bright); color: #fff; }
 .msg.user { align-self: flex-end; max-width: 78%; }
 .msg.assistant { align-self: flex-start; max-width: 88%; }
 .msg.problem .text {
@@ -220,7 +241,7 @@ body {
 
 .actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .actions button {
-  font: inherit; font-size: 12.5px; padding: 5px 11px; cursor: pointer;
+  font: inherit; font-size: 12.5px; padding: 5px 12px; cursor: pointer;
   background: var(--surface); color: var(--accent-ink);
   border: 1px solid var(--accent); border-radius: 999px;
 }
@@ -229,8 +250,8 @@ body {
 .document { margin-top: 9px; }
 .document a {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; padding: 6px 12px; text-decoration: none;
-  background: var(--accent); color: #fff; border-radius: 7px;
+  font-size: 12.5px; padding: 7px 14px; text-decoration: none;
+  background: var(--accent-bright); color: #fff; border-radius: 20px;
 }
 .document a::before { content: "🖨"; }
 .document a:hover { filter: brightness(1.06); }
@@ -251,9 +272,13 @@ body {
 
 .composer { display: flex; gap: 9px; padding: 14px 18px 6px; border-top: 1px solid var(--line); }
 .composer textarea {
-  flex: 1; resize: vertical; font: inherit; padding: 9px 11px;
-  background: var(--surface-2); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 8px;
+  flex: 1; resize: vertical; font: inherit; padding: 9px 12px;
+  background: var(--surface); color: var(--ink);
+  border: 1.6px solid var(--line); border-radius: 8px;
+}
+.composer textarea:focus {
+  outline: none; border-color: var(--accent-bright);
+  box-shadow: 0 0 0 3px rgba(51, 190, 253, 0.18);
 }
 .composer-foot {
   display: flex; justify-content: space-between;
@@ -262,11 +287,12 @@ body {
 }
 
 button.primary {
-  font: inherit; font-weight: 600; padding: 9px 17px; cursor: pointer;
-  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  font: inherit; font-weight: 600; padding: 9px 20px; cursor: pointer;
+  background: var(--accent-bright); color: #fff; border: none; border-radius: 20px;
 }
+button.primary:hover:not(:disabled) { filter: brightness(1.05); }
 button.primary:disabled { opacity: .5; cursor: default; }
 button.ghost {
-  font: inherit; padding: 9px 17px; cursor: pointer;
-  background: none; color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+  font: inherit; padding: 9px 20px; cursor: pointer;
+  background: none; color: var(--accent-ink); border: 1.6px solid var(--line); border-radius: 20px;
 }
