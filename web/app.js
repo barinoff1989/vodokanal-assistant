@@ -160,7 +160,7 @@ function selectSubscriber(account, { announce } = { announce: true }) {
     resetDialog();
     addMessage(
       "assistant",
-      "Добрый день, " + entry.name + "! Чем вам помочь?",
+      "Добрый день, чем могу помочь?",
     );
   }
 }
