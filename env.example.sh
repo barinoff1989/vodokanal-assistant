@@ -1,10 +1,13 @@
-# Шаблон переменных окружения. Скопировать в .env и заполнить.
-# .env в репозиторий не попадает (см. .gitignore) — секретов здесь быть не должно.
+# Шаблон переменных окружения. Не читается приложением напрямую — это
+# справочник команд `export` для вашей оболочки (или профиля bash/PowerShell/
+# CI-секретов). Скопировать нужные строки в терминал, заполнить реальными
+# значениями, выполнить. Секретов в этом файле быть не должно — только пустые
+# заготовки под них.
 
 # --- Окружение ---------------------------------------------------------------
 # local | dev | production
 # Локальная тестовая модель разрешена только вне production (см. local_test_backend.py).
-APP_ENV=local
+export APP_ENV=local
 
 # --- Выбор провайдера генерации ----------------------------------------------
 # Это и есть «переключение одной строкой» из ADR-002: остальной код не меняется.
@@ -16,61 +19,70 @@ APP_ENV=local
 # Почему на прототипе Яндекс, а не GigaChat: GigaChat требует корневых
 # сертификатов НУЦ Минцифры, которых на машине прототипа не будет
 # (решение от 1 сентября 2026, контекст раздел 46).
-LLM_PROVIDER=local-test
+export LLM_PROVIDER=local-test
 
 # --- Локальная тестовая модель (шаг 0.5) -------------------------------------
-OLLAMA_BASE_URL=http://localhost:11434
-LOCAL_MODEL=qwen2.5:7b-instruct-q4_K_M
-LOCAL_TIMEOUT_SECONDS=120
+export OLLAMA_BASE_URL=http://localhost:11434
+export LOCAL_MODEL=qwen2.5:7b-instruct-q4_K_M
+export LOCAL_TIMEOUT_SECONDS=120
 
 # --- YandexGPT (шаг 4: генерация на прототипе, судья на MVP) -----------------
 # Штатного провайдера в LiteLLM нет — подключение через OpenAI-совместимый
 # режим, поэтому адрес задаётся явно.
 # [ПРОВЕРИТЬ ПЕРЕД ШАГОМ 4] Доверяет ли Python сертификату Yandex Cloud без
 # дополнительных корневых сертификатов. Если нет — решение о переносе прототипа
-# на Яндекс теряет смысл и его нужно пересматривать. Команда проверки — в
-# docs/model-choice.md.
-YANDEX_API_KEY=
-YANDEX_FOLDER_ID=
+# на Яндекс теряет смысл и его нужно пересматривать.
+#
+# Задать ключ можно двумя способами:
+#   1) на одну сессию оболочки — выполнить export здесь и ниже прямо в
+#      терминале, значение живёт, пока открыт терминал;
+#   2) насовсем — записать реальные значения в свой профиль (~/.bashrc,
+#      ~/.zshrc) командой `setx` на Windows:
+#        setx YANDEX_API_KEY "реальное-значение"
+#        setx YANDEX_FOLDER_ID "реальное-значение"
+#      `setx` применяется к новым сессиям терминала, не к уже открытой.
+export YANDEX_API_KEY=
+export YANDEX_FOLDER_ID=
 
-# --- Vault (опционально, локальная альтернатива хранению ключей в .env) -----
+# --- Vault (опционально, локальная альтернатива переменным окружения) -------
 # Не нужно ни на MVP (там Vault Agent Injector в Kubernetes, ADR по инфра не
 # написан — раздел 8.5 контекста), ни в CI — только для локальной разработки,
-# когда YANDEX_API_KEY/YANDEX_FOLDER_ID не хочется держать в этом файле.
-# Включается присутствием VAULT_ADDR — без него app/secrets_vault.py не делает
-# ничего. Не переопределяет YANDEX_API_KEY/YANDEX_FOLDER_ID, если они уже
-# заданы выше или переменными окружения.
-# Dev-режим Vault сам по себе НЕ безопаснее .env (один root-токен, всё в
-# памяти, без TLS) — это репетиция интеграции, не защита секрета.
+# когда YANDEX_API_KEY/YANDEX_FOLDER_ID не хочется держать в переменных
+# окружения оболочки. Включается присутствием VAULT_ADDR — без него
+# app/secrets_vault.py не делает ничего. Не переопределяет
+# YANDEX_API_KEY/YANDEX_FOLDER_ID, если они уже заданы переменными окружения.
+# Dev-режим Vault сам по себе НЕ безопаснее переменных окружения (один
+# root-токен, всё в памяти, без TLS) — это репетиция интеграции, не защита
+# секрета.
 #   vault server -dev -dev-root-token-id="root-local-dev"
 #   vault kv put secret/vodokanal/yandexgpt api_key=... folder_id=...
-# VAULT_ADDR=http://127.0.0.1:8200
-# VAULT_TOKEN=root-local-dev
-YANDEX_API_BASE=https://llm.api.cloud.yandex.net/v1
+# export VAULT_ADDR=http://127.0.0.1:8200
+# export VAULT_TOKEN=root-local-dev
+export YANDEX_API_BASE=https://llm.api.cloud.yandex.net/v1
 # Обычно оставляется пустым: имя модели собирается из YANDEX_FOLDER_ID выше.
 # Задавать вручную нужно только чтобы обратиться к другой модели Яндекса.
-YANDEX_MODEL_URI=
+export YANDEX_MODEL_URI=
 
 # --- GigaChat (только MVP в проде; на прототипе не используется) --------------
 # Требует установленных корневых сертификатов НУЦ Минцифры, иначе обращение
 # падает на проверке TLS. Отключать проверку сертификата недопустимо: по этому
 # соединению идут персональные данные абонента.
-GIGACHAT_CLIENT_ID=
-GIGACHAT_CLIENT_SECRET=
-GIGACHAT_SCOPE=GIGACHAT_API_CORP
+export GIGACHAT_CLIENT_ID=
+export GIGACHAT_CLIENT_SECRET=
+export GIGACHAT_SCOPE=GIGACHAT_API_CORP
 
 # --- Локальные слепки систем (шаг 0, docker-compose.yml) ----------------------
 # Пароль локальный и одноразовый: контейнер доступен только с этой машины,
 # реальных данных в нём нет по построению.
-POSTGRES_USER=vodokanal
-POSTGRES_PASSWORD=vodokanal_local
-POSTGRES_DB=billing_stub
-POSTGRES_PORT=5432
+export POSTGRES_USER=vodokanal
+export POSTGRES_PASSWORD=vodokanal_local
+export POSTGRES_DB=billing_stub
+export POSTGRES_PORT=5432
 
 # --- Счётчики лимитов и состояние сессии (шаг 4, docker-compose.yml) ---------
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=0
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
+export REDIS_DB=0
 
 # --- Векторное хранилище базы знаний (шаг 5) ----------------------------------
 # memory (по умолчанию) — InMemoryVectorStore, список в процессе, ничего
@@ -81,13 +93,13 @@ REDIS_DB=0
 # открывает уже наполненную коллекцию (секунды, не минуты). Наполняет её
 # отдельный прогон, перед первым запуском и каждый раз, когда меняется корпус:
 #   python scripts/reindex_kb.py
-VECTOR_STORE=memory
-QDRANT_URL=http://localhost:6333
-QDRANT_COLLECTION=kb_faq
+export VECTOR_STORE=memory
+export QDRANT_URL=http://localhost:6333
+export QDRANT_COLLECTION=kb_faq
 
 # --- Переранжирование (шаг 5, ADR-007) -----------------------------------------
 # Выключено по умолчанию: кросс-энкодер на CPU — 5,8 с на 20 кандидатах при
 # бюджете поиска 100 мс (замерено, ADR-014), неработоспособно на синхронном
 # пути абонента. Включать только для офлайн-сценариев или на GPU.
-RERANKER_ENABLED=false
-RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+export RERANKER_ENABLED=false
+export RERANKER_MODEL=BAAI/bge-reranker-v2-m3

@@ -24,11 +24,13 @@ Environment = Literal["local", "dev", "production"]
 
 
 class Settings(BaseSettings):
-    """Настройки, читаемые из .env и переменных окружения."""
+    """Настройки, читаемые из переменных окружения процесса.
+
+    Файл `.env` не читается сознательно: секреты (`YANDEX_API_KEY` и т.п.)
+    должны приходить из переменных окружения оболочки, а не лежать в файле на
+    диске. См. `env.example.sh` — список переменных с командами `export`."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
