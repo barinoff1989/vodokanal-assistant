@@ -130,7 +130,7 @@ def test_несинтетический_документ_помечен_не_б�
     assert SYNTHETIC_CATEGORY not in (sections[0].source_title or "")
 
 
-# --- тип обращения документа (payload-фильтр, ADR-006) --------------------------- #
+# --- тип обращения документа (payload-фильтр, ADR-200) --------------------------- #
 
 
 def _doc_with_subject(tmp_path: Path, subject: str | None) -> Path:

@@ -280,7 +280,7 @@ body {
 .document a::before { content: "🖨"; }
 .document a:hover { filter: brightness(1.06); }
 
-/* --- Подтверждение (правило 4.7) ------------------------------------------ */
+/* --- Подтверждение ------------------------------------------ */
 
 .confirm {
   margin: 0 18px 14px; padding: 13px 15px;

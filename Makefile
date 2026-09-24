@@ -1,5 +1,5 @@
 # Команды запуска. На Windows выполнять из Git Bash.
-# Набор растёт по шагам плана разработки; закрыты шаги 0.5, 1-6, 8, 8.5, 9 и часть 10.
+# Набор целей растёт вместе с проектом.
 
 PYTHON ?= python
 LOCAL_MODEL ?= qwen2.5:7b-instruct-q4_K_M
@@ -10,12 +10,12 @@ help:
 	@echo "install-min — всё, что нужно тестам (без тяжёлого LiteLLM)"
 	@echo "install     — весь пакет целиком, включая LiteLLM и Redis"
 	@echo "install-llm — только тяжёлый LiteLLM, если install-min уже прошёл"
-	@echo "install-data — генератор синтетики (шаг 0)"
-	@echo "install-pii — защита персональных данных + русская модель (шаг 3)"
-	@echo "install-search — модели поиска: эмбеддинги и переранжирование (шаг 5)"
+	@echo "install-data — генератор синтетики"
+	@echo "install-pii — защита персональных данных + русская модель"
+	@echo "install-search — модели поиска: эмбеддинги и переранжирование"
 	@echo "model-pull  — скачать локальную тестовую модель в Ollama"
 	@echo "preflight   — проверить, что Ollama поднята и модель на месте"
-	@echo "measure-search — замер моделей поиска на этой машине (шаг 5)"
+	@echo "measure-search — замер моделей поиска на этой машине"
 	@echo "golden-set  — собрать эталонный набор поиска из разметки"
 	@echo "subscriber-directory — пересобрать справочник абонентов стенда из data_example/"
 	@echo "measure-retrieval — качество поиска и цена порога (секунды)"
@@ -49,14 +49,14 @@ install-llm:
 install-data:
 	$(PYTHON) $(PIP_SLOW) ".[data]"
 
-# Ставится на шаге 5. Тянет torch — на процессорной машине это около 250 МБ
+# Модели поиска. Тянут torch — на процессорной машине это около 250 МБ
 # колёс, плюс по 2,3 ГБ весов на каждую модель при первом запуске замера.
 install-search:
 	$(PYTHON) $(PIP_SLOW) sentence-transformers psutil
 
-# Отвечает на вопрос, укладываются ли модели ADR-007 в бюджет задержки на машине
+# Отвечает на вопрос, укладываются ли модели ADR-300 в бюджет задержки на машине
 # без видеоускорителя. Числа, а не рассуждение: проект уже дважды получал
-# результаты, обратные ожиданиям (раздел 51).
+# результаты, обратные ожиданиям.
 measure-search:
 	$(PYTHON) scripts/measure_search_models.py
 
@@ -83,7 +83,7 @@ measure-retrieval: golden-set
 measure-reranking: golden-set
 	$(PYTHON) scripts/measure_reranking.py --json golden_set/reranking.json
 
-# Ночной прогон судьи качества по эталонному набору (код-шаг 10). Живой: нужны
+# Ночной прогон судьи качества по эталонному набору. Живой: нужны
 # Ollama (судья local-test) и провайдер генерации с ключами. Пишет итог прогона
 # в таблицу quality_reports базы telemetry.
 quality-eval: golden-set
