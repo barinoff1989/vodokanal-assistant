@@ -154,6 +154,10 @@ services:
       GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_CORP}
     ports:
       - "8000:8000"
+      # Метрики prometheus-client (METRICS_PORT, по умолчанию 9100) — отдельный порт,
+      # не адрес основного приложения. Опубликован, чтобы ссылка в панели стенда
+      # и `curl` с хоста работали; на MVP их читает Zabbix или Prometheus (ADR-200).
+      - "${METRICS_PORT:-9100}:9100"
     volumes:
       # Live-reload при разработке — без пересборки образа на каждую правку.
       - ./app:/app/app
