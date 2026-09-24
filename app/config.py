@@ -159,6 +159,18 @@ class Settings(BaseSettings):
     qdrant_collection: str = "kb_faq"
     """Адрес и коллекция Qdrant. Используются, только если `vector_store="qdrant"`."""
 
+    qdrant_prefer_grpc: bool = True
+    qdrant_grpc_port: int = 6334
+    """Клиент Qdrant ходит по gRPC (порт `qdrant_grpc_port`), а не по REST.
+
+    **Замер 24 сентября 2026** (docker compose, 100 000 точек 384-d, текст в payload, из контейнера backend, запросы
+    подряд): gRPC стабилен — P50 6–13 мс при любых лимите и payload; `qdrant-client` по REST нестабилен — от ≈6 до ≈60 мс
+    на запрос в зависимости от размера запроса и ответа (топ-20 с payload: P50 60 мс, топ-100 с payload: P50 15 мс, P99 40 мс).
+    Голый `httpx` по тому же HTTP — ≈5 мс, сервер тратит ≈3 мс: разброс — в пути REST внутри `qdrant-client`
+    (похоже на задержку TCP около 40 мс; причина не доказана). **На прототипе (51 фрагмент, 190 точек, полный перебор с
+    payload) наоборот: REST P50 13 мс, gRPC 26 мс** — выдача всех точек по gRPC дороже. Один хост, запросы не
+    параллельные; на другой платформе цифры могут отличаться (ADR-200, «Почему Qdrant»). `false` — вернуть REST."""
+
     embedding_model: str = "intfloat/multilingual-e5-small"
     """Модель эмбеддингов **прототипа** (ADR-300). На MVP — BGE-M3 по ADR-300.
 

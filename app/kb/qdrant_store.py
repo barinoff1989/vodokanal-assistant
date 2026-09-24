@@ -6,10 +6,13 @@
 ЧТО ЗДЕСЬ ЕСТЬ. Один фрагмент — несколько точек Qdrant (заголовок/вопрос плюс
 части ответа, как и в памяти), payload несёт всё нужное для восстановления
 `ContextChunk`, коллекция создаётся лениво при первой загрузке (размер вектора
-берётся из самих данных, а не захардкожен). Поиск — точный: лимит выборки равен
-числу точек в коллекции, поэтому на объёме прототипа это не приближение
-HNSW-графа, а полный перебор через Qdrant — то же самое, что раньше делал
-Python-цикл, просто по сети.
+берётся из самих данных, а не захардкожен). Поиск на малом объёме (до
+`EXACT_SCAN_MAX_POINTS` точек, то есть на прототипе) — точный: лимит выборки равен
+числу точек в коллекции, это не приближение HNSW-графа, а полный перебор через
+Qdrant — то же самое, что раньше делал Python-цикл, просто по сети. **На объёме
+MVP (30 000–100 000 точек) лимит ограничен** (`top_k * PARTS_HEADROOM`): выдача всех
+точек стоила 1,3 с по REST и 3,4 с по gRPC на 100 000 точек (замер 24 сентября 2026,
+ADR-200) — на порядки выше бюджета поиска.
 
 BLUE-GREEN (`blue_green=True`, `publish()`): переиндексация пишет в новую
 версию коллекции, читатели ищут по алиасу и не видят недособранного корпуса;
@@ -49,6 +52,19 @@ __all__ = ["QdrantVectorStore"]
 # Фиксированный namespace для uuid5: id точки детерминирован по (chunk_id, часть),
 # а не случаен — повторный upsert того же фрагмента переписывает те же точки,
 # а не плодит дубли. Значение само по себе не имеет смысла, важна стабильность.
+# До скольких точек в коллекции поиск остаётся точным (лимит = все точки). Замер
+# 24 сентября 2026: возврат 100 000 точек — 1,3 с (REST) и 3,4 с (gRPC), то есть
+# ≈13–34 мкс на точку; 500 точек — порядка 7–17 мс. Граница — допущение автора.
+EXACT_SCAN_MAX_POINTS = 500
+
+# Во сколько раз точек запрашивается больше, чем нужно фрагментов (`top_k`): у
+# фрагмента несколько точек (заголовок и части ответа), а выдача сворачивается до
+# одной пары на фрагмент. Допущение автора, на реальном корпусе не измерялось. Что
+# это меняет: лучшая точка каждого фрагмента идёт первой, поэтому верх выдачи
+# (в промпт идут первые `top_n`) остаётся точным; хвост из `top_k` кандидатов
+# может оказаться короче, если несколько фрагментов заняли много первых точек.
+PARTS_HEADROOM = 5
+
 _NAMESPACE = uuid.UUID("6f6e5f8e-6b1a-4e2b-9f2a-2f7c2a9d6b40")
 
 
@@ -90,10 +106,23 @@ class QdrantVectorStore:
     и `attach` (читающая сторона, `build_knowledge_base(reindex=False)`,
     боевой путь Backend при `VECTOR_STORE=qdrant`) — см. докстринг `attach`."""
 
-    def __init__(self, url: str, collection: str, *, blue_green: bool = False) -> None:
+    def __init__(
+        self,
+        url: str,
+        collection: str,
+        *,
+        blue_green: bool = False,
+        prefer_grpc: bool = False,
+        grpc_port: int = 6334,
+    ) -> None:
+        """:param prefer_grpc: ходить по gRPC (порт `grpc_port`), а не по REST — на объёме MVP
+        gRPC стабилен (P50 6–13 мс), REST через `qdrant-client` разбросан от 6 до 60 мс (замер
+        24 сентября 2026, см. `app/config.py`, `qdrant_prefer_grpc`). Для `:memory:` игнорируется."""
         self._url = url
         self._collection = collection
         self._blue_green = blue_green
+        self._prefer_grpc = prefer_grpc
+        self._grpc_port = grpc_port
         self._target: str | None = None
         self._client: QdrantClient | None = None
         self._point_count = 0
@@ -114,7 +143,9 @@ class QdrantVectorStore:
             self._client = (
                 QdrantClient(location=":memory:")
                 if self._url == ":memory:"
-                else QdrantClient(url=self._url)
+                else QdrantClient(
+                    url=self._url, prefer_grpc=self._prefer_grpc, grpc_port=self._grpc_port
+                )
             )
         return self._client
 
@@ -273,7 +304,11 @@ class QdrantVectorStore:
         return len(self._chunk_ids)
 
     def search_parts(
-        self, vector: Sequence[float], inquiry_type: str | None = None
+        self,
+        vector: Sequence[float],
+        inquiry_type: str | None = None,
+        *,
+        top_k: int | None = None,
     ) -> list[tuple[ContextChunk, float]]:
         from qdrant_client.models import (
             FieldCondition,
@@ -298,13 +333,17 @@ class QdrantVectorStore:
             if inquiry_type is not None
             else None
         )
-        # Лимит — все точки коллекции: на объёме прототипа это точный перебор,
-        # не приближение (см. докстринг модуля).
+        # Лимит: до EXACT_SCAN_MAX_POINTS точек (или без `top_k`) — все точки
+        # коллекции, точный перебор; на объёме MVP — `top_k * PARTS_HEADROOM`
+        # (см. докстринг модуля и константы).
+        limit = self._point_count
+        if top_k is not None and self._point_count > EXACT_SCAN_MAX_POINTS:
+            limit = min(self._point_count, top_k * PARTS_HEADROOM)
         result = client.query_points(
             self._collection,
             query=list(vector),
             query_filter=query_filter,
-            limit=self._point_count,
+            limit=limit,
         )
 
         best: dict[str, tuple[ContextChunk, float]] = {}

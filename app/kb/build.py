@@ -182,7 +182,12 @@ def build_knowledge_base(
     if settings.vector_store == "qdrant" and not reindex:
         from app.kb.qdrant_store import QdrantVectorStore
 
-        attached_store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+        attached_store = QdrantVectorStore(
+            settings.qdrant_url,
+            settings.qdrant_collection,
+            prefer_grpc=settings.qdrant_prefer_grpc,
+            grpc_port=settings.qdrant_grpc_port,
+        )
         count = attached_store.attach()
         if count == 0:
             logger.warning(
@@ -222,7 +227,11 @@ def build_knowledge_base(
         # blue-green: пишем в новую версию коллекции, алиас переключается
         # только после полной загрузки — поиск по нему не видит недособранного.
         store = QdrantVectorStore(
-            settings.qdrant_url, settings.qdrant_collection, blue_green=True
+            settings.qdrant_url,
+            settings.qdrant_collection,
+            blue_green=True,
+            prefer_grpc=settings.qdrant_prefer_grpc,
+            grpc_port=settings.qdrant_grpc_port,
         )
         logger.info(
             "векторное хранилище: Qdrant (%s, алиас %s)",

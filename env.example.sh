@@ -95,6 +95,9 @@ export REDIS_DB=0
 #   python scripts/reindex_kb.py
 export VECTOR_STORE=memory
 export QDRANT_URL=http://localhost:6333
+# gRPC вместо REST: стабильные 6–13 мс против разброса 6–60 мс (замер 24.09.2026, app/config.py). false — вернуть REST.
+export QDRANT_PREFER_GRPC=true
+export QDRANT_GRPC_PORT=6334
 export QDRANT_COLLECTION=kb_faq
 
 # --- Переранжирование (ADR-300) -----------------------------------------

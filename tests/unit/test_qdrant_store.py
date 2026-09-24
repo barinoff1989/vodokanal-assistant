@@ -271,3 +271,63 @@ def test_publish_заменяет_прежнюю_коллекцию_с_тем_ж
     reader = _store_on("kb", legacy)
     assert reader.attach() == 1
     assert {c.chunk_id for c, _ in reader.search_parts([1.0, 0.0])} == {"fresh"}
+
+
+# --- протокол клиента и лимит выдачи (замер 24 сентября 2026, ADR-200) ---------- #
+
+
+def test_клиент_создаётся_с_grpc_и_портом(monkeypatch):
+    """`prefer_grpc` и порт доходят до `QdrantClient`: по REST поиск стоил ≈48 мс, по gRPC ≈6 мс."""
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    import qdrant_client
+
+    monkeypatch.setattr(qdrant_client, "QdrantClient", FakeClient)
+    QdrantVectorStore(
+        "http://qdrant:6333", "kb", prefer_grpc=True, grpc_port=6335
+    )._ensure_client()
+
+    assert captured == {"url": "http://qdrant:6333", "prefer_grpc": True, "grpc_port": 6335}
+
+
+def _many(store: QdrantVectorStore, count: int) -> None:
+    """`count` фрагментов по одной точке, все по разным направлениям — порядок известен."""
+    store.upsert(
+        [
+            _Entry(
+                chunk=ContextChunk(
+                    chunk_id=f"c{i}", text="t", source_title="s", source_url="u", relevance_score=0.0
+                ),
+                vectors=([1.0, i / count],),
+            )
+            for i in range(count)
+        ]
+    )
+
+
+def test_на_малом_объёме_выдача_точная_даже_с_top_k():
+    """До EXACT_SCAN_MAX_POINTS точек лимит — все точки, `top_k` ничего не режет."""
+    store = _store("exact")
+    _many(store, 100)
+
+    assert len(store.search_parts([1.0, 0.0], top_k=3)) == 100
+
+
+def test_на_большом_объёме_лимит_ограничен_top_k():
+    """Выше границы запрашивается `top_k * PARTS_HEADROOM` точек, а не вся коллекция:
+    возврат всех 100 000 точек стоил 1,3–3,4 с."""
+    from app.kb.qdrant_store import EXACT_SCAN_MAX_POINTS, PARTS_HEADROOM
+
+    store = _store("bounded")
+    _many(store, EXACT_SCAN_MAX_POINTS + 100)
+
+    found = store.search_parts([1.0, 0.0], top_k=3)
+    assert len(found) == 3 * PARTS_HEADROOM
+    # верх выдачи точный: самый близкий фрагмент — c0 (вектор [1, 0])
+    assert max(found, key=lambda pair: pair[1])[0].chunk_id == "c0"
+    # без `top_k` — по-прежнему все
+    assert len(store.search_parts([1.0, 0.0])) == EXACT_SCAN_MAX_POINTS + 100

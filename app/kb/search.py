@@ -212,9 +212,17 @@ class VectorStore(Protocol):
         ...
 
     def search_parts(
-        self, vector: Sequence[float], inquiry_type: str | None = None
+        self,
+        vector: Sequence[float],
+        inquiry_type: str | None = None,
+        *,
+        top_k: int | None = None,
     ) -> list[tuple[ContextChunk, float]]:
         """Все фрагменты против вектора запроса, по одной паре на фрагмент.
+
+        `top_k` — подсказка, сколько фрагментов понадобится: реализация вправе
+        вернуть больше (в памяти — всё), но на большом объёме обязана не отдавать
+        весь корпус (`QdrantVectorStore`: `top_k * PARTS_HEADROOM` точек).
 
         `inquiry_type` — фильтр, который участвует **в самом поиске**, а не
         применяется к готовой выдаче (ADR-200): из кандидатов исключаются
@@ -242,7 +250,11 @@ class InMemoryVectorStore:
         self._entries.extend(entries)
 
     def search_parts(
-        self, vector: Sequence[float], inquiry_type: str | None = None
+        self,
+        vector: Sequence[float],
+        inquiry_type: str | None = None,
+        *,
+        top_k: int | None = None,
     ) -> list[tuple[ContextChunk, float]]:
         return [
             (entry.chunk, entry.similarity(vector))
@@ -408,7 +420,7 @@ class KnowledgeBase:
 
         (vector,) = self._embedder.encode([QUERY_PREFIX + query])
         scored = sorted(
-            self._store.search_parts(vector, inquiry_type), key=lambda pair: -pair[1]
+            self._store.search_parts(vector, inquiry_type, top_k=top_k), key=lambda pair: -pair[1]
         )
         candidates = scored[:top_k] if top_k is not None else scored
         if self._reranker is not None:
