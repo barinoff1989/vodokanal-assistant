@@ -231,8 +231,8 @@ def main(argv: list[str] | None = None) -> int:
         print(timing.line())
 
     if not args.skip_reranker:
-        print(f"\nПереранжирование — {RERANKER}")
-        timings, memory, load, size = measure_reranker(args.top_k)
+        print(f"\nПереранжирование — {args.reranker}")
+        timings, memory, load, size = measure_reranker(args.reranker, args.top_k)
         print(f"  {'веса на диске':44} {size:8.2f} ГБ")
         print(f"  {'память под моделью':44} {format_memory(memory)}")
         print(f"  {'загрузка модели с диска':44} {load:8.1f} с")
