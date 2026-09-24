@@ -42,6 +42,7 @@ from contextlib import contextmanager
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 __all__ = [
+    "ASSISTANT_MULTI_INTENT",
     "ASSISTANT_RESPONSES",
     "ASSISTANT_RESPONSE_SECONDS",
     "ASSISTANT_TTFT_SECONDS",
@@ -53,6 +54,7 @@ __all__ = [
     "PII_REQUESTS",
     "VECTOR_DB_PENDING",
     "record_guardrail",
+    "record_multi_intent",
     "record_pii",
     "record_response",
     "record_tokens",
@@ -140,6 +142,22 @@ VECTOR_DB_PENDING = Gauge(
 
 Объявить сразу дешевле, чем потом: виджет дашборда на неё уже ссылается, и без
 объявления запрос возвращал бы пустоту, неотличимую от «очередь пуста»."""
+
+
+ASSISTANT_MULTI_INTENT = Counter(
+    "assistant_multi_intent_total",
+    "Реплики абонентов, разобранные детектором намерений, по числу задач",
+    labelnames=("tasks",),
+)
+"""Реплики, в которых детектор нашёл две и более задачи (или операцию, которую
+помощник не выполняет). Доля к `assistant_responses_total` — метрика триггера 4
+перехода на LangGraph (ADR-200): порог 5%. Это оценка детектора по правилам, а
+не разметка людьми, поэтому решение о переходе по ней одной не принимается."""
+
+
+def record_multi_intent(tasks: int) -> None:
+    """Записать реплику с несколькими задачами."""
+    ASSISTANT_MULTI_INTENT.labels(tasks=str(tasks)).inc()
 
 
 def record_response(

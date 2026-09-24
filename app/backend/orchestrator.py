@@ -44,8 +44,9 @@ from datetime import datetime
 from typing import Protocol
 
 from app.agents.advisor import Advisor
+from app.agents.intents import Condition, Part, PartKind, split_intents
 from app.agents.triage import Triage
-from app.backend.registration import Registrar
+from app.backend.registration import REGISTRABLE, Registrar
 from app.backend.sessions import SessionStore, SubscriberMismatch
 from app.billing.source import BillingSource
 from app.config import Settings, get_settings
@@ -60,6 +61,7 @@ from app.models import (
     GenerateRequest,
     GenerateResponse,
     MetadataEvent,
+    PiiReport,
     ProblemDetail,
     SessionState,
     SuggestedAction,
@@ -71,6 +73,19 @@ from app.taxonomy import InquiryType
 __all__ = ["DirectAnswer", "DirectResponder", "Orchestrator"]
 
 logger = logging.getLogger(__name__)
+
+NO_ACTIONS_RULE = (
+    " Ты только консультируешь: не передаёшь показания, не проверяешь долг и лицевой "
+    "счёт, не регистрируешь и не оплачиваешь. Никогда не пиши, что ты это сделал или "
+    "делаешь. Если просят выполнить операцию, скажи, что не можешь, и объясни, как "
+    "сделать это самому."
+)
+"""Добавляется к системной части запроса, который идёт к модели.
+
+Модель без этого правила отвечала «Передал показания 1234. Проверил наличие
+долга — его нет», хотя записи и проверки в этом пути нет. Второй рубеж — правило
+`unperformed_action` в охранителях шлюза (`app/gateway/guardrails.py`): промпту
+модель может не подчиниться, а выученное правило она обойти не может."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,8 +439,182 @@ class Orchestrator:
         request = self._with_context(request)
         return request, self._advice(request)
 
+    # --- несколько задач в одной реплике ---------------------------------------- #
+
+    def _plan(self, request: GenerateRequest) -> list[Part] | None:
+        """Части реплики, если задач несколько (или единственная — операция без выполнения).
+
+        `None` — обычный путь. Не разбираются: нажатие кнопки, запрос с уже
+        готовым контекстом (служебные вызовы) и запрос, где тему или тип
+        проставили снаружи: пришедшее извне значение считается более осведомлённым.
+        """
+        meta = request.metadata
+        if (
+            meta.intent is not None
+            or request.has_context
+            or meta.topic is not None
+            or meta.inquiry_type is not None
+        ):
+            return None
+        parts = split_intents(request.query)
+        if len(parts) >= 2 or parts[0].kind is PartKind.UNSUPPORTED:
+            return parts
+        return None
+
+    def _has_debt(self, request: GenerateRequest) -> bool | None:
+        """Есть ли долг по счёту абонента. `None` — счёта нет или Биллинг не подключён."""
+        if self._billing is None:
+            return None
+        account = self._billing.account(request.metadata.subscriber_id)
+        return None if account is None else account.has_debt
+
+    def _refusal(self, part: Part) -> str:
+        """Текст для операции, которую помощник не выполняет: что не сделано и как сделать."""
+        return (
+            f"Эту операцию помощник выполнить не может: {part.action}. Сделайте это в "
+            f"личном кабинете или по телефону контакт-центра "
+            f"{self._settings.contact_center_phone}. Я ничего не передавал, не оплачивал "
+            "и не менял."
+        )
+
+    def _condition_text(self, part: Part, debt: bool | None) -> str | None:
+        """Почему условная часть не выполняется. `None` — условие выполнено."""
+        if part.condition is Condition.UNKNOWN or debt is None:
+            return (
+                f"Условие «если {part.condition_text}» я проверить не могу, поэтому эту "
+                "часть не выполняю. Уточните после ответа на предыдущие части и "
+                "повторите просьбу."
+            )
+        if part.condition is Condition.NO_DEBT and debt:
+            return (
+                f"Условие «если {part.condition_text}» не выполнено: по счёту есть "
+                "задолженность. Эту часть не выполняю."
+            )
+        if part.condition is Condition.HAS_DEBT and not debt:
+            return (
+                f"Условие «если {part.condition_text}» не выполнено: задолженности по "
+                "счёту нет. Эту часть не выполняю."
+            )
+        return None
+
+    @staticmethod
+    def _label(part: Part) -> str:
+        text = part.text.strip(" .?!,;")
+        if part.kind is PartKind.CONDITIONAL:
+            text = f"если {part.condition_text} — {text}"
+        return text if len(text) <= 80 else text[:77] + "…"
+
+    async def _stream_parts(
+        self, request: GenerateRequest, parts: list[Part], started: float
+    ) -> AsyncIterator[GatewayEvent]:
+        """Ответить на каждую часть реплики по очереди — один поток, один итог.
+
+        Часть отвечается тем же путём, что и отдельная реплика: правилами и
+        ответчиками, затем базой знаний, затем моделью. Что не сделано, говорится
+        прямо: операция без выполнения, невыполненное условие, непроверяемое
+        условие. Регистрация предлагается по **первой** подходящей части — в
+        состоянии диалога один черновик; об остальных абонент предупреждён.
+        """
+        trace_id = self._gateway.new_trace_id()
+        if (problem := self._quota_problem(request, trace_id)) is not None:
+            yield ErrorEvent(problem=problem)
+            return
+
+        metrics.record_multi_intent(len(parts))
+        numbered = len(parts) > 1
+        prompt_tokens = completion_tokens = 0
+        pii = PiiReport()
+        disclaimer: str | None = None
+        offer_source: GenerateRequest | None = None
+        skipped_offers: list[str] = []
+        debt = self._has_debt(request)
+
+        for number, part in enumerate(parts, start=1):
+            if numbered:
+                head = f"**{number}. {self._label(part)}**\n"
+                yield TokenEvent(delta=("\n\n" if number > 1 else "") + head)
+
+            if part.kind is PartKind.UNSUPPORTED:
+                yield TokenEvent(delta=self._refusal(part))
+                continue
+            if part.kind is PartKind.CONDITIONAL and (why := self._condition_text(part, debt)):
+                yield TokenEvent(delta=why)
+                continue
+
+            sub_meta = request.metadata.model_copy(update={"topic": None, "inquiry_type": None})
+            sub = request.model_copy(update={"query": part.text, "metadata": sub_meta})
+            sub = await self._triaged(sub)
+            sub = self._with_address(sub)
+            if (direct := self._direct_answer(sub)) is not None:
+                yield TokenEvent(delta=direct.text)
+                disclaimer = disclaimer or direct.disclaimer
+                continue
+            sub = self._with_context(sub)
+            if (advice := self._advice(sub)) is not None:
+                yield TokenEvent(delta=advice.text)
+                continue
+
+            sub = sub.model_copy(update={"system": sub.system + NO_ACTIONS_RULE})
+            async for event in self._gateway.stream(sub):
+                if isinstance(event, TokenEvent):
+                    yield event
+                elif isinstance(event, ErrorEvent):
+                    yield event
+                    return
+                elif isinstance(event, MetadataEvent):
+                    disclaimer = disclaimer or event.disclaimer
+                elif isinstance(event, DoneEvent):
+                    prompt_tokens += event.usage.prompt_tokens
+                    completion_tokens += event.usage.completion_tokens
+                    if event.pii_report.pii_detected:
+                        pii = PiiReport(
+                            pii_detected=True,
+                            entities=sorted({*pii.entities, *event.pii_report.entities}),
+                        )
+            if sub.metadata.inquiry_type in REGISTRABLE:
+                if offer_source is None:
+                    offer_source = sub
+                else:
+                    skipped_offers.append(self._label(part))
+
+        actions: tuple[SuggestedAction, ...] = ()
+        if offer_source is not None:
+            offer, actions = self._offer_registration(offer_source)
+            if offer:
+                yield TokenEvent(delta=offer)
+                if skipped_offers:
+                    yield TokenEvent(
+                        delta=(
+                            "\n\nОбращение по остальным задачам ("
+                            + "; ".join(skipped_offers)
+                            + ") оформлю отдельно: напишите их следующим сообщением после "
+                            "подтверждения этого."
+                        ).replace("\\n", "\n")
+                    )
+
+        metrics.ASSISTANT_TTFT_SECONDS.observe(time.perf_counter() - started)
+        metrics.record_response(
+            channel=request.metadata.channel.value, inquiry_type=None, outcome="success"
+        )
+        yield MetadataEvent(
+            confidence_score=1.0,
+            disclaimer=disclaimer,
+            suggested_actions=list(actions),
+        )
+        yield DoneEvent(
+            finish_reason=FinishReason.STOP,
+            usage=Usage(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens),
+            pii_report=pii,
+            routing={"path": "multi", "parts": len(parts)},
+            trace_id=trace_id,
+        )
+
     async def generate(self, request: GenerateRequest) -> GenerateResponse | ProblemDetail:
-        """Ответ целиком. Для служебных вызовов, не для пути абонента."""
+        """Ответ целиком. Для служебных вызовов, не для пути абонента.
+
+        Несколько задач в реплике здесь **не разбираются**: разбор идёт только на
+        пути абонента (`stream`); служебные вызовы получают прежнее поведение.
+        """
         request, answer = await self._route(request)
         if answer is None:
             response = await self._gateway.generate(request)
@@ -457,6 +646,10 @@ class Orchestrator:
     async def stream(self, request: GenerateRequest) -> AsyncIterator[GatewayEvent]:
         """Ответ потоком — основной путь абонента."""
         started = time.perf_counter()
+        if (parts := self._plan(request)) is not None:
+            async for event in self._stream_parts(request, parts, started):
+                yield event
+            return
         request, answer = await self._route(request)
 
         if answer is not None:
@@ -488,6 +681,7 @@ class Orchestrator:
             return
 
         offer, actions = self._offer_registration(request)
+        request = request.model_copy(update={"system": request.system + NO_ACTIONS_RULE})
         async for event in self._gateway.stream(request):
             if offer and isinstance(event, MetadataEvent):
                 # Приписка идёт последним куском текста, а не отдельным полем:

@@ -34,6 +34,7 @@ from app.gateway.pii_filter import PiiSanitizer
 from app.models import FinishReason
 
 __all__ = [
+    "ACTION_CLAIM_FALLBACK",
     "SAFE_FALLBACK",
     "BlockReason",
     "GroundednessReport",
@@ -56,6 +57,7 @@ class BlockReason(StrEnum):
     TOXICITY = "toxicity"
     POLICY = "policy"
     PROMPT_LEAK = "prompt_leak"
+    UNPERFORMED_ACTION = "unperformed_action"
 
 
 SAFE_FALLBACK = (
@@ -67,6 +69,16 @@ SAFE_FALLBACK = (
 Формулировка нейтральная намеренно: сообщение вида «ответ заблокирован из-за
 персональных данных» само по себе подсказывало бы, что именно удалось вытянуть
 из системы."""
+
+
+ACTION_CLAIM_FALLBACK = (
+    "Я не выполняю операции — не передаю показания, не проверяю долг и не оплачиваю. "
+    "Это можно сделать в личном кабинете или по телефону контактного центра водоканала."
+)
+"""Что видит абонент вместо ответа, где модель написала, что выполнила действие.
+
+Отдельный текст, а не нейтральная заглушка: здесь абоненту важно узнать, что
+действие **не** выполнено, иначе он поверит невыполненному «передал показания»."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +94,11 @@ class GuardrailVerdict:
     @property
     def text_for_subscriber(self) -> str | None:
         """Что показать вместо ответа. `None`, если ответ разрешён."""
-        return None if self.allowed else SAFE_FALLBACK
+        if self.allowed:
+            return None
+        if self.reason is BlockReason.UNPERFORMED_ACTION:
+            return ACTION_CLAIM_FALLBACK
+        return SAFE_FALLBACK
 
     @property
     def finish_reason(self) -> FinishReason | None:
@@ -158,11 +174,40 @@ class SyncGuardrails:
             )
         if _PROMPT_LEAK_RE.search(answer):
             return GuardrailVerdict(allowed=False, reason=BlockReason.PROMPT_LEAK)
+        if _ACTION_CLAIM_RE.search(answer):
+            return GuardrailVerdict(allowed=False, reason=BlockReason.UNPERFORMED_ACTION)
         if _TOXIC_RE.search(answer):
             return GuardrailVerdict(allowed=False, reason=BlockReason.TOXICITY)
         if _POLICY_RE.search(answer):
             return GuardrailVerdict(allowed=False, reason=BlockReason.POLICY)
         return GuardrailVerdict(allowed=True)
+
+
+# --- ложное «сделал» --------------------------------------------------------------- #
+
+# Помощник только консультирует: он не передаёт показания, не проверяет долг, не
+# регистрирует и не оплачивает по просьбе в тексте (регистрация идёт отдельным
+# путём — по кнопке). Модель же может написать «Передал показания 1234. Проверил
+# наличие долга — его нет», и абонент поверит, что это сделано. Ловится **первое
+# лицо в начале предложения**: «Передал…», «Отправила…», «Оформляю…». Третье лицо
+# («Специалист проверил счётчик»), обращение к абоненту («Если вы передали…»),
+# приказ («Передайте показания») и инфинитив («передать показания в кабинете») не
+# подходят: подлежащее стоит раньше глагола либо форма другая.
+#
+# > **[ПРЕДПОЛОЖЕНИЕ]** Перечень глаголов собран вручную, неполон и на живых ответах
+# > не проверялся: частота ложных блокировок и пропусков неизвестна.
+_ACTION_VERBS = (
+    "передал[аи]?|отправил[аи]?|направил[аи]?|зарегистрировал[аи]?|оформил[аи]?|"
+    "заказал[аи]?|оплатил[аи]?|проверил[аи]?|внёс|внесла|внесли|подал[аи]?|"
+    "создал[аи]?|отменил[аи]?|закрыл[аи]?|изменил[аи]?|"
+    "передаю|отправляю|направляю|регистрирую|оформляю|заказываю|оплачиваю|проверяю|"
+    "вношу|подаю|создаю|отменяю|закрываю|изменяю"
+)
+_ACTION_CLAIM_RE = re.compile(
+    r"(?:^|(?<=[.!?…])|(?<=\n))[\s*_>•\-–—]*(?:я\s+)?(?:уже\s+)?"
+    r"(?:" + _ACTION_VERBS + r")(?![\w-])",
+    re.IGNORECASE,
+)
 
 
 # --- проверка на потоке ---------------------------------------------------------- #
@@ -206,7 +251,8 @@ class StreamGuard:
         emitted_any = False
         async for delta in stream:
             if not self.feed(delta).allowed:
-                yield ("\n\n" + SAFE_FALLBACK) if emitted_any else SAFE_FALLBACK
+                fallback = self.verdict.text_for_subscriber or SAFE_FALLBACK
+                yield ("\n\n" + fallback) if emitted_any else fallback
                 return
             yield delta
             emitted_any = True
