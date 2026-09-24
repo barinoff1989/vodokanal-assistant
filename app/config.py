@@ -390,8 +390,8 @@ class Settings(BaseSettings):
     lk_db: str = "lk_stub"
     inquiries_db: str = "inquiries_stub"
 
-    # Не слепок чужой системы — наше хранилище телеметрии (роль ClickHouse на
-    # прототипе). Одна строка на вызов LLM Gateway.
+    # Не слепок чужой системы — наше хранилище телеметрии (отдельная база
+    # Postgres, ADR-200). Одна строка на вызов LLM Gateway.
     telemetry_db: str = "telemetry"
 
     @property

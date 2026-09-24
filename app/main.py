@@ -182,7 +182,7 @@ def _build_billing_source() -> BillingSource | None:
 
 
 def _build_usage() -> UsageStore:
-    """Хранилище событий использования — роль ClickHouse на прототипе.
+    """Хранилище событий использования (база `telemetry` в Postgres).
 
     Выключается само, если нет Postgres или драйвера: телеметрия важна, но её
     отсутствие не должно ронять сервис. Prometheus при этом работает — пути

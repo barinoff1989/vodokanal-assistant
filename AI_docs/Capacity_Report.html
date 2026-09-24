@@ -236,15 +236,15 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
 
   <section class="block" id="storage">
     <h2>6. Хранилища — растут медленнее, чем кажется</h2>
-    <p class="dek">По формулам расчёта нагрузки. База знаний — около тысячи документов, а не петабайты.</p>
+    <p class="dek">По формулам расчёта нагрузки. База знаний — несколько тысяч документов (3 000–5 000), а не петабайты.</p>
 
     <div class="table-wrap">
       <table class="spec">
         <thead><tr><th>Хранилище</th><th class="num">MVP (10 тыс.)</th><th class="num">Тираж (100 тыс.)</th><th>Чем определяется</th></tr></thead>
         <tbody>
-          <tr><td class="name">Qdrant — векторы</td><td class="num">≈ 195 МБ</td><td class="num">≈ 195 МБ</td><td>Только размером базы знаний: 20 000 чанков × 1024-d float32 × 2,5 (payload + HNSW). <b>От числа абонентов не зависит вообще</b></td></tr>
+          <tr><td class="name">Qdrant — векторы</td><td class="num">≈ 0,3–1,0 ГБ</td><td class="num">≈ 0,3–1,0 ГБ</td><td>Только размером базы знаний: 30 000–100 000 частей (несколько тысяч документов × 10–20 частей — допущение) × 1024-d float32 × 2,5 (payload + HNSW). <b>От числа абонентов не зависит вообще</b></td></tr>
           <tr><td class="name">Loki — логи</td><td class="num">≈ 0,2 ГБ / 30 дней</td><td class="num">≈ 1,7 ГБ / 30 дней</td><td>Запросов/сутки × ~10 записей трассировки × ~1 КБ. Растёт линейно с трафиком; критична политика ротации, а не объём</td></tr>
-          <tr><td class="name">ClickHouse — телеметрия</td><td class="num">≈ 0,1 ГБ/год</td><td class="num">≈ 1,0 ГБ/год</td><td>1 запись на запрос ~0,5 КБ, без учёта сжатия</td></tr>
+          <tr><td class="name">Postgres (telemetry) — события использования</td><td class="num">≈ 2–22 МБ/год</td><td class="num">≈ 21–245 МБ/год</td><td>1 строка на вызов модели ≈ 308 байт с индексами (замер на 2 млн строк, ADR-200) × число вызовов по сценариям ADR-500; с запасом ×10 — до ≈ 2,4 ГБ/год на тираже</td></tr>
           <tr><td class="name">Postgres — сессии, Sync State, MV профиля</td><td class="num">единицы ГБ</td><td class="num">десятки ГБ</td><td>Логи диалогов и кэш профиля; определяется сроком хранения диалогов, а не пиковой нагрузкой</td></tr>
           <tr><td class="name">S3 / MinIO</td><td class="num">десятки ГБ</td><td class="num">сотни ГБ</td><td>Data Lake Raw Zone, курируемый корпус, бэкапы, готовые документы обращений</td></tr>
         </tbody>
@@ -269,7 +269,7 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
           <tr><td class="name">Qdrant</td><td>Ничего — объём определяется базой знаний</td><td><span class="pill good">без изменений</span></td></tr>
           <tr><td class="name">Embedding / Reranker Inference</td><td>Загрузка растёт с ~0,1% до ~1%</td><td><span class="pill good">без изменений</span> — одна GPU, размер диктует окно ETL</td></tr>
           <tr><td class="name">Backend, LLM Gateway</td><td>L растёт с 0,08 до 0,75 — всё ещё меньше единицы</td><td><span class="pill good">реплики как есть</span> — 2–3 для отказоустойчивости, не для пропускной способности</td></tr>
-          <tr><td class="name">Loki, ClickHouse</td><td>Линейный рост ×10</td><td><span class="pill warn">пересмотреть ротацию</span> — объёмы малы, но политика хранения обязана быть задана</td></tr>
+          <tr><td class="name">Loki, Postgres (telemetry)</td><td>Линейный рост ×10</td><td><span class="pill warn">пересмотреть ротацию</span> — объёмы малы, но политика хранения обязана быть задана</td></tr>
           <tr><td class="name">Postgres</td><td>Логи диалогов растут ×10</td><td><span class="pill warn">задать срок хранения диалогов</span> — иначе растёт неограниченно</td></tr>
           <tr><td class="name">Расход токенов</td><td>63 млн → 630 млн в месяц</td><td><span class="pill crit">главная статья OPEX</span> — единственное, что растёт болезненно</td></tr>
           <tr><td class="name">ETL-окно</td><td>Ничего — зависит от базы знаний, не от абонентов</td><td><span class="pill good">без изменений</span></td></tr>
@@ -296,7 +296,7 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
           <tr><td class="name">OPEX · токены LLM-judge</td><td>39 млн/мес (MVP) · 120 млн/мес (тираж). Из них <b>30 млн — ночной батч Golden Set, не зависит от числа абонентов</b>; остальное — выборочная оценка 5% прод-трафика</td><td>Тариф провайдера-судьи (YandexGPT) — отдельно от тарифа генерации</td></tr>
           <tr><td class="name">OPEX · токены агента Этапа 2</td><td>≈ 12 млн/мес (MVP) · ≈ 124 млн/мес (тираж), базовый сценарий — см. раздел 8.5. ~+20% к генерации; при плохом function-calling до +40–60%</td><td>Тот же тариф генерации; либо CAPEX self-hosted-модели агента, если function-calling у провайдеров РФ окажется ненадёжным</td></tr><tr><td class="name">OPEX · узлы кластера</td><td>Пулы general / gpu / data по деплой-схеме; L &lt; 1 — реплик нужно минимум</td><td>Стоимость узла в месяц или амортизация собственного железа</td></tr>
           <tr><td class="name">OPEX · хранилище</td><td>Единицы ГБ на MVP, десятки–сотни на тираже</td><td>Стоимость ГБ/мес по классам: NVMe, обычный диск, объектное</td></tr>
-          <tr><td class="name">OPEX · наблюдаемость</td><td>Loki 0,2–1,7 ГБ/30 дней, ClickHouse 0,1–1,0 ГБ/год</td><td>Входит в стоимость узлов и хранилища</td></tr>
+          <tr><td class="name">OPEX · наблюдаемость</td><td>Loki 0,2–1,7 ГБ/30 дней, телеметрия в Postgres 2–245 МБ/год</td><td>Входит в стоимость узлов и хранилища</td></tr>
           <tr><td class="name">CAPEX · разработка</td><td>Человеко-часы по ролям и фазам разработки</td><td>Внутренняя ставка по ролям</td></tr>
           <tr><td class="name">CAPEX · GPU (только self-hosted)</td><td>1× A100 80GB по прежнему расчёту — <b>требует пересчёта</b> после вывода 1</td><td>Закупка или аренда</td></tr>
           <tr><td class="name">CAPEX · обучение / поддержка K8s</td><td>Не оценено — выделенного инженера в команде нет</td><td>Внешняя поддержка или обучение</td></tr>

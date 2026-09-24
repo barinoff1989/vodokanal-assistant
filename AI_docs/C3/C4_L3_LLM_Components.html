@@ -93,7 +93,7 @@
     <b>Billing Callback — не выделен.</b> Это не компонент, а две записи метрик из
     <code>LlmGateway</code>: <code>llm_gateway_tokens_total</code>, <code>llm_provider_used_total</code>
     и гистограммы времён — в <b>Prometheus</b> (порт 9100, дашборд); плюс одна строка на
-    вызов в таблице <code>usage_events</code> — на прототипе <b>Postgres</b>, на MVP ClickHouse.
+    вызов в таблице <code>usage_events</code> базы <b>Postgres</b> (отдельная база telemetry).
     Стоимость в деньгах не считается: у проекта нет тарифов провайдера.
     Роль «аналитика по абонентам / типам / моделям» закрывает <code>usage_events</code>, чего счётчики
     Prometheus без взрыва кардинальности не дают.

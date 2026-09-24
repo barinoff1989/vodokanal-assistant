@@ -1,8 +1,7 @@
 """Запись качества — два зерна: прогон (`quality_reports`) и ответ (`quality_assessments`).
 
-На MVP итог оценки судьёй уходит в ClickHouse рядом с телеметрией использования;
-на прототипе ClickHouse не развёрнут, и его роль занимают таблицы в базе
-`telemetry` (той же, что `usage_events`).
+Итог оценки судьёй пишется рядом с телеметрией использования: таблицы лежат в
+базе `telemetry` в Postgres (той же, что `usage_events`).
 
 * `QualityStore` → `quality_reports`. Зерно — прогон: ночной прогон
   (`scripts/run_quality_eval.py`) пишет средние по эталонному набору плюс долю
@@ -60,7 +59,7 @@ class QualityReport:
 
 
 class QualityStore:
-    """Запись отчётов о качестве в Postgres (роль ClickHouse на прототипе).
+    """Запись отчётов о качестве в Postgres.
 
     :param connect: как получить соединение (функция, а не готовое соединение).
         `None` — запись выключена, `record` молча ничего не делает.

@@ -74,7 +74,7 @@ class QualityScores:
     """Оценки одного ответа. Значения в диапазоне [0, 1].
 
     Уходит в `quality_report`: агрегат по прогону пишется в таблицу
-    `quality_reports` базы `telemetry` (на MVP — ClickHouse).
+    `quality_reports` базы `telemetry` в Postgres.
     """
 
     faithfulness: float

@@ -107,7 +107,7 @@ class LlmGateway:
         лениво, чтобы импорт модуля не тянул тяжёлую зависимость.
     :param usage: куда писать событие каждого вызова (токены, модель, latency,
         исход). ``None`` — не пишется. Роль «Billing Callback» диаграммы C4_L3_LLM:
-        на прототипе это таблица в Postgres, на MVP — ClickHouse.
+        таблица `usage_events` в Postgres (ADR-200).
         Запись best-effort и **после** сборки ответа — во время до первого куска
         не входит.
     :param live_judge: судья на живом пути — async-часть Guardrails диаграммы
