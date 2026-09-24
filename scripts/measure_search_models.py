@@ -109,7 +109,7 @@ def format_memory(value: float) -> str:
     """Память с оговоркой, когда числу верить нельзя.
 
     Прирост RSS не ловит отображённые в память веса: замер BGE-M3 дал 0,33 ГБ
-    при 4,25 ГБ на диске, а кросс-энкодер — ровно ноль. Печатать такое как факт
+    при 2,14 ГиБ на диске, а кросс-энкодер — ровно ноль. Печатать такое как факт
     нельзя, а молчать — значит потерять хоть какой-то ориентир.
     """
     if value < 0.05:
@@ -133,7 +133,13 @@ def cache_size_gb(model_name: str) -> float:
     folder = Path(constants.HF_HUB_CACHE) / f"models--{model_name.replace('/', '--')}"
     if not folder.exists():
         return 0.0
-    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file()) / 1024**3
+    # Кэш может хранить несколько редакций модели (например, `model.safetensors` и
+    # `pytorch_model.bin` из разных снимков) — тогда вес считался бы дважды. Берём
+    # только снимок, на который указывает `refs/main`: именно его грузит библиотека.
+    ref = folder / "refs" / "main"
+    snapshot = folder / "snapshots" / ref.read_text().strip() if ref.exists() else None
+    root = snapshot if snapshot is not None and snapshot.exists() else folder
+    return sum(f.stat().st_size for f in root.rglob("*") if f.is_file() or f.is_symlink()) / 1024**3
 
 
 def repeat(operation, runs: int = RUNS) -> list[float]:

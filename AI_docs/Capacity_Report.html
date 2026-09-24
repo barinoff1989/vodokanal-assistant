@@ -135,7 +135,7 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
 
     <div class="tier">
       <div class="tname">Базовый режим — разработка и отладка</div>
-      <div class="tsub">Backend + LLM Gateway + Qdrant + Redis + BGE-M3 (эмбеддинги на CPU)</div>
+      <div class="tsub">Backend + LLM Gateway + Qdrant + Redis + e5-small (эмбеддинги на CPU; BGE-M3 на CPU даёт 210–300 мс на запрос при бюджете 100 мс)</div>
       <div class="table-wrap">
         <table class="spec">
           <thead><tr><th>Ресурс</th><th class="num">Требуется</th><th>Комментарий</th></tr></thead>
@@ -143,7 +143,7 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
             <tr><td class="name">CPU</td><td class="num">4–6 ядер</td><td>Оркестрация и retrieval; генерация ответов — на внешнем API (GigaChat Pro)</td></tr>
             <tr><td class="name">RAM</td><td class="num">6–8 ГБ</td><td>Qdrant с малой коллекцией + Postgres + Redis + процессы приложения</td></tr>
             <tr><td class="name">Диск</td><td class="num">40–60 ГБ</td><td>Держать 100 ГБ свободных: образы, синтетика, индексы</td></tr>
-            <tr><td class="name">GPU</td><td class="num">не нужна</td><td>Основная модель внешняя; эмбеддинги на CPU приемлемы на объёме прототипа</td></tr>
+            <tr><td class="name">GPU</td><td class="num">не нужна</td><td>Основная модель внешняя; эмбеддинги e5-small на CPU укладываются в бюджет (22–37 мс, замер)</td></tr>
           </tbody>
         </table>
       </div>
@@ -151,7 +151,7 @@ L (конкурентность) = λ × W&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← за
 
     <div class="tier">
       <div class="tname">Пиковый режим — с локальной тестовой LLM</div>
-      <div class="tsub">то же + Qwen2.5-7B-Instruct, INT4/GGUF, ~3,8 ГБ весов, на CPU</div>
+      <div class="tsub">то же + Qwen2.5-7B-Instruct, INT4/GGUF, 4,7 ГБ на диске (замер `ollama list`), на CPU</div>
       <div class="table-wrap">
         <table class="spec">
           <thead><tr><th>Ресурс</th><th class="num">Требуется</th><th>Комментарий</th></tr></thead>
