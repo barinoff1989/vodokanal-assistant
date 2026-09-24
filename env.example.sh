@@ -45,14 +45,14 @@ export YANDEX_API_KEY=
 export YANDEX_FOLDER_ID=
 
 # --- Vault (опционально, локальная альтернатива переменным окружения) -------
-# Не нужно ни на MVP (там Vault Agent Injector в Kubernetes, ADR по инфра не
-# написан), ни в CI — только для локальной разработки,
+# Не нужно ни на MVP (там переменные окружения из Kubernetes Secret, который
+# создаёт pipeline из GitLab CI variables, ADR-400), ни в CI — только для локальной разработки,
 # когда YANDEX_API_KEY/YANDEX_FOLDER_ID не хочется держать в переменных
 # окружения оболочки. Включается присутствием VAULT_ADDR — без него
 # app/secrets_vault.py не делает ничего. Не переопределяет
 # YANDEX_API_KEY/YANDEX_FOLDER_ID, если они уже заданы переменными окружения.
 # Dev-режим Vault сам по себе НЕ безопаснее переменных окружения (один
-# root-токен, всё в памяти, без TLS) — это репетиция интеграции, не защита
+# root-токен, всё в памяти, без TLS) — необязательный локальный вариант, не защита
 # секрета.
 #   vault server -dev -dev-root-token-id="root-local-dev"
 #   vault kv put secret/vodokanal/yandexgpt api_key=... folder_id=...
