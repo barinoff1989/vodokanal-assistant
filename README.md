@@ -28,7 +28,7 @@
 импортирует на уровне модуля:
 
 ```bash
-python -m pip install --timeout 120 --retries 10 pytest pytest-asyncio ruff mypy pydantic pydantic-settings httpx fastapi sse-starlette prometheus-client pyyaml
+python -m pip install --timeout 120 --retries 10 pytest pytest-asyncio ruff mypy pydantic pydantic-settings httpx fastapi prometheus-client pyyaml
 ```
 
 ```bash

@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 
 # Здесь то, без чего сервис не запускается, — и ничего кроме.
 #
-# ПОРЯДОК БЫЛ ОБРАТНЫМ, И ЭТО БЫЛ ДЕФЕКТ. `fastapi`, `sse-starlette`,
+# ПОРЯДОК БЫЛ ОБРАТНЫМ, И ЭТО БЫЛ ДЕФЕКТ. `fastapi`,
 # `prometheus-client` и `pyyaml` лежали в необязательных группах, хотя
 # импортируются на уровне модуля: `pip install .` давал окружение, в котором
 # `import app.gateway.llm_gateway` падает. `litellm` наоборот числился
@@ -21,7 +21,6 @@ dependencies = [
     "httpx",
     "fastapi",
     "uvicorn",
-    "sse-starlette",
     "prometheus-client",
     "pyyaml",
     "redis",
