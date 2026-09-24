@@ -67,8 +67,8 @@
           Presidio), <b>токсичность / policy / разглашение промпта</b> — regex (LLM не в бюджет 50&nbsp;мс,
           тонкие случаи → судья). Async groundedness на выходе шлюза — <b>дешёвая эвристика</b>
           (доля слов ответа в контексте, <code>provisional</code>). Настоящую оценку
-          (faithfulness, answer&nbsp;relevancy) делает <b>судья</b> (<code>app/quality/judge.py</code>,
-          ADR-007) — отдельная модель, ночным прогоном <code>scripts/run_quality_eval.py</code> по
+          (faithfulness, answer&nbsp;relevancy) делает <b>судья</b> (<code>app/quality/judge.py</code>)
+          — отдельная модель, ночным прогоном <code>scripts/run_quality_eval.py</code> по
           эталонному набору, вне пути абонента.</td>
       </tr>
       <tr>
@@ -84,18 +84,17 @@
         <td>Центр</td>
         <td>OpenAI-совместимый вызов, маршрутизация моделей по <code>litellm_config.yaml</code> и fallback,
           retry / circuit breaker / timeout, адаптеры провайдеров, SSE-стриминг. Отдельного
-          прокси-процесса нет: <code>litellm.Router</code> живёт внутри процесса шлюза (раздел 5.5,
-          ИСПРАВЛЕНО v4.17).</td>
+          прокси-процесса нет: <code>litellm.Router</code> живёт внутри процесса шлюза.</td>
       </tr>
     </tbody>
   </table>
 
   <p style="margin-top:1.2rem">
-    <b>Billing Callback — свёрнут (v4.50).</b> Это не компонент, а две записи метрик из
+    <b>Billing Callback — не выделен.</b> Это не компонент, а две записи метрик из
     <code>LlmGateway</code>: <code>llm_gateway_tokens_total</code>, <code>llm_provider_used_total</code>
-    и гистограммы времён — в <b>Prometheus</b> (порт 9100, дашборд раздел 37); плюс одна строка на
-    вызов в таблице <code>usage_events</code> — на прототипе <b>Postgres</b>, на MVP ClickHouse
-    (раздел 35.1, 31). Стоимость в деньгах не считается: у проекта нет тарифов провайдера (P0&nbsp;№1).
+    и гистограммы времён — в <b>Prometheus</b> (порт 9100, дашборд); плюс одна строка на
+    вызов в таблице <code>usage_events</code> — на прототипе <b>Postgres</b>, на MVP ClickHouse.
+    Стоимость в деньгах не считается: у проекта нет тарифов провайдера.
     Роль «аналитика по абонентам / типам / моделям» закрывает <code>usage_events</code>, чего счётчики
     Prometheus без взрыва кардинальности не дают.
   </p>
