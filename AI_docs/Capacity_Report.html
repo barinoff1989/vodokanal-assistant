@@ -170,7 +170,7 @@
       <li><b>Подробный расчёт:</b> ADR-500, «Расчётный sizing»; лист «Sizing» в <code>Tech_Stack_Matrix.xlsx</code></li>
       <li><b>Допущения:</b> узел загружен не более чем на 70%; запас на потерю одного узла</li>
     </ul>
-    <div class="table-wrap"><table class="spec"><thead><tr><th>Пул</th><th>Класс узла (принят)</th><th class="num">MVP, узлов</th><th class="num">Тираж, узлов</th></tr></thead><tbody><tr><td class="name">Общий пул (платформа, приложение, наблюдаемость)</td><td>8 vCPU, 16 ГиБ</td><td class="num">3</td><td class="num">4</td></tr><tr><td class="name">Пул данных (NVMe)</td><td>8 vCPU, 32 ГиБ</td><td class="num">2</td><td class="num">2</td></tr><tr><td class="name">GPU-пул (эмбеддинги, реранкер)</td><td>8 vCPU, 32 ГиБ, видеокарта 24 ГБ</td><td class="num">0</td><td class="num">0</td></tr><tr><td class="name">GPU-пул генерации (тираж)</td><td>16 vCPU, 128 ГиБ, видеокарта 80 ГБ</td><td class="num">0</td><td class="num">1</td></tr><tr><td class="name">Итого узлов</td><td></td><td class="num">5</td><td class="num">7</td></tr></tbody></table></div>
+    <div class="table-wrap"><table class="spec"><thead><tr><th>Пул</th><th>Класс узла (принят)</th><th class="num">MVP, узлов</th><th class="num">Тираж, узлов</th></tr></thead><tbody><tr><td class="name">Общий пул (платформа, приложение, наблюдаемость)</td><td>8 vCPU, 16 ГиБ</td><td class="num">4</td><td class="num">4</td></tr><tr><td class="name">Пул данных (NVMe)</td><td>8 vCPU, 32 ГиБ</td><td class="num">2</td><td class="num">2</td></tr><tr><td class="name">GPU-пул (эмбеддинги, реранкер)</td><td>8 vCPU, 32 ГиБ, видеокарта 24 ГБ</td><td class="num">0</td><td class="num">0</td></tr><tr><td class="name">GPU-пул генерации (тираж)</td><td>16 vCPU, 128 ГиБ, видеокарта 80 ГБ</td><td class="num">0</td><td class="num">1</td></tr><tr><td class="name">Итого узлов</td><td></td><td class="num">6</td><td class="num">7</td></tr></tbody></table></div>
     <ul>
       <li><b>Базовый вариант:</b> без GPU (в кластере владельца GPU-узлов нет, со слов); эмбеддинги e5-small на CPU; реранкер выключен</li>
       <li><b>Вариант с GPU-узлом:</b> 6 узлов на MVP, 7 на тираже (покупка и подключение, цена не оценена)</li>
@@ -201,7 +201,7 @@
     <h2>7. Что нужно, чтобы это стало сметой</h2>
     <div class="table-wrap"><table class="spec"><thead><tr><th>Статья</th><th>Количество — уже посчитано</th><th>Цена — заполнить</th></tr></thead><tbody>
       <tr><td class="name">OPEX · токены генерации и судьи</td><td>1 234 ₽–101 280 ₽ в месяц на MVP; 3 305 ₽–1,07 млн ₽ на тираже</td><td>Тариф провайдера, отдельно вход и выход и отдельно для судьи</td></tr>
-      <tr><td class="name">OPEX · узлы кластера</td><td>5 узлов на MVP, 7 на тираже (класс узла принят)</td><td>Стоимость узла или амортизация из коммерческих предложений</td></tr>
+      <tr><td class="name">OPEX · узлы кластера</td><td>6 узлов на MVP, 7 на тираже (класс узла принят)</td><td>Стоимость узла или амортизация из коммерческих предложений</td></tr>
       <tr><td class="name">OPEX · хранилище</td><td>≈170 ГиБ на MVP, ≈661 ГиБ на тираже</td><td>Стоимость гигабайта по классам: NVMe, обычный диск, объектное</td></tr>
       <tr><td class="name">CAPEX · GPU (только собственная модель по триггеру)</td><td>1 карта с 80 ГБ и узел под неё; ещё 1 GPU-узел под эмбеддинги и реранкер на MVP</td><td>Закупка или аренда — цен нет</td></tr>
       <tr><td class="name">CAPEX · разработка</td><td>Человеко-дни по блокам (ADR-600)</td><td>Внутренняя ставка по ролям</td></tr>
