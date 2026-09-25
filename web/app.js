@@ -234,12 +234,24 @@ function addMessage(role, text, extraClass) {
   return item.querySelector(".text");
 }
 
+// Список источников и пометка «демо-документ» на стенде не показываются
+// (решение 25 сентября 2026: убрать надпись). Контракт ответа не менялся: API
+// по-прежнему отдаёт `sources` и `disclaimer`, а событие в служебной панели
+// считает источники. Заметка про демонстрационные документы вместе с ними
+// тоже не выводится; заметки другого рода (например, об актуальности графика
+// отключений) показываются как раньше.
+const SHOW_SOURCES = false;
+
 function renderSources(node, sources, disclaimer) {
-  if ((!sources || !sources.length) && !disclaimer) return;
+  const syntheticNote = Boolean(sources && sources.some((s) => s.synthetic));
+  if (!SHOW_SOURCES && syntheticNote) disclaimer = null;
+  const listed = SHOW_SOURCES ? sources : [];
+  if ((!listed || !listed.length) && !disclaimer) return;
   const block = document.createElement("div");
   block.className = "sources";
 
-  if (sources && sources.length) {
+  if (listed && listed.length) {
+    sources = listed;
     // Рядом с каждым источником — его близость и пометка происхождения.
     // Близость показана потому, что порог 0,872 подобран замером и на защите
     // спросят, почему найдено именно это; без числа ответить нечем.
