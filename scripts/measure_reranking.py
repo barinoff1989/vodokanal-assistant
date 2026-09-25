@@ -135,6 +135,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", type=Path, help="куда сохранить числа замера")
     parser.add_argument("--limit", type=int, help="взять только первые N вопросов")
+    parser.add_argument(
+        "--model",
+        default=RERANKER,
+        help=f"кросс-энкодер для замера (по умолчанию {RERANKER})",
+    )
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="разрешить модели исполнить свой код при загрузке (нужно не всем; включать осознанно)",
+    )
     args = parser.parse_args()
 
     settings = Settings()
@@ -154,7 +164,20 @@ def main() -> None:
     from sentence_transformers import CrossEncoder
 
     started = time.perf_counter()
-    model = CrossEncoder(RERANKER, device="cpu")
+    # dtype=float32 явно: transformers 5 берёт тип из конфигурации модели, и у
+    # gte-multilingual-reranker-base это float16 — на CPU он на порядки медленнее.
+    import torch
+
+    model = CrossEncoder(
+        args.model,
+        device="cpu",
+        trust_remote_code=args.trust_remote_code,
+        model_kwargs={"dtype": torch.float32},
+    )
+    if args.trust_remote_code:
+        from _reranker_compat import fix_gte_buffers
+
+        print(f"буферов пересоздано у модулей: {fix_gte_buffers(model)}")
     print(f"загрузка кросс-энкодера: {time.perf_counter() - started:.1f} с")
 
     results: list[dict[str, Any]] = []
@@ -302,7 +325,7 @@ def main() -> None:
         args.json.write_text(
             json.dumps(
                 {
-                    "кросс_энкодер": RERANKER,
+                    "кросс_энкодер": args.model,
                     "эмбеддинги": settings.embedding_model,
                     "пар": pairs_total,
                     "секунд": round(elapsed, 1),
