@@ -4,6 +4,17 @@
 переходом к агенту с операциями записи через подтверждение абонента (Этап 2). Пакет документации для
 приёмки проекта — [AI_docs/](AI_docs/README.md).
 
+## Материалы для сдачи
+
+| Что | Где |
+|---|---|
+| **Репозиторий: /infra** — поднятие всего стека (Postgres, Redis, Qdrant, Backend) | [infra_instruction.md](infra_instruction.md); файлы стека — `docker-compose.yml`, `Dockerfile`, `docker/postgres/init/` |
+| **Репозиторий: /backend** — код агентов и API (Python) | [backend_description.md](backend_description.md); код — папка `app/` |
+| **Репозиторий: /docs** — архитектурная документация (ADR в Markdown, схемы, таблицы, PDF) | [docs_description.md](docs_description.md); документы — папка `AI_docs/` |
+| **Видео для презентации**: работа с прототипом на демо-стенде, шесть вопросов (67 секунд) | [AI_docs/Demo_prototype.mp4](AI_docs/Demo_prototype.mp4) |
+| **Презентация проекта** (PDF, 9 страниц) | [AI_docs/Сдача проекта AI-помощник абонента водоканала.pdf](AI_docs/Сдача%20проекта%20AI-помощник%20абонента%20водоканала.pdf) |
+| **Нагрузочный отчёт** — сколько запросов в секунду держит система и какая задержка | [AI_docs/Load_Report.md](AI_docs/Load_Report.md) |
+
 ## Что уже работает
 
 Шлюз к модели с лимитами, обезличиванием и охранителями; Backend с выбором пути ответа; поиск по базе
@@ -35,7 +46,7 @@ python -m pip install --timeout 120 --retries 10 pytest pytest-asyncio ruff mypy
 python -m pytest -q
 ```
 
-Ожидаемо: `562 passed, 5 deselected`. Пять отложенных — живые, им нужна модель.
+Ожидаемо: `916 passed, 3 skipped, 10 deselected`. Десять отложенных — живые, им нужна модель; три пропущены по условию среды.
 
 Весь пакет целиком, включая LiteLLM и клиент Redis:
 
@@ -124,7 +135,10 @@ YandexGPT, дополнительно задайте `LLM_PROVIDER=yandexgpt` т
 | `scripts/build_golden_set.py` | Сборка эталонного набора поиска из разметки и настоящих источников |
 | `scripts/measure_retrieval.py` | Замер поиска на эталонном наборе: попадание в тройку и цена порога |
 | `scripts/run_quality_eval.py` | Ночной прогон судьи качества по эталонному набору: faithfulness и answer relevancy |
-| `scripts/measure_reranking.py` | Кросс-энкодер против косинуса вне пути абонента: расхождение троек и разделяющая способность |
+| `scripts/measure_reranking.py` | Кросс-энкодер против косинуса вне пути абонента: расхождение троек и разделяющая способность (`--model` выбирает модель) |
+| `scripts/measure_reranker_latency.py` | Задержка кросс-энкодеров на CPU: 20 пар «вопрос — фрагмент», варианты длины, числа кандидатов и INT8 |
+| `scripts/load_server.py` | Сервер для нагрузочного замера: Backend с заглушкой вместо провайдера модели |
+| `scripts/load_test.py` | Нагрузочный замер: RPS, задержки, загрузка процессора и памяти (отчёт — `AI_docs/Load_Report.md`) |
 | `scripts/measure_search_models.py` | Замер моделей поиска: вес, память, задержка против бюджета |
 | `scripts/measure_classifier.py` | Замер запасного режима классификации на настоящих обращениях |
 | `scripts/measure_local_model.py` | Характеристики локальной модели: вес, память, скорость, время до первого токена |
@@ -138,6 +152,8 @@ YandexGPT, дополнительно задайте `LLM_PROVIDER=yandexgpt` т
 | **Пакет документации для приёмки** — архитектурные решения, стек, безопасность, ресурсы, дорожная карта | `AI_docs/ADR/`, индекс — `AI_docs/README.md` |
 | Диаграммы (C1 контекст, C3 контейнеры, деплоймент, последовательности) | `AI_docs/C1/`, `AI_docs/C3/`, `AI_docs/` (корень, `*.html`) |
 | Спецификация API — собирается из кода, не правится руками | `AI_docs/API_Spec.yaml` |
+| Нагрузочный отчёт и его исходные числа | `AI_docs/Load_Report.md`, `golden_set/load_test*.json` |
+| Видео работы с прототипом | `AI_docs/Demo_prototype.mp4` |
 | Корпус базы знаний прототипа | `kb/faq_voronezh.json` |
 | Эталонный набор поиска — разметка и последний замер | `golden_set/` |
 | Пример данных Биллинга и ЛК | `data_example/` |
